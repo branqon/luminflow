@@ -63,7 +63,23 @@ function getZoneFromPosition(x, y, rect) {
 }
 ```
 
-Note selection uses angle to pick the scale degree and ringDepth to shift octave within the zone's octave range. The angle is normalized to 0–1 (0 = top, 1 = full rotation clockwise) and mapped to the available notes.
+Note selection uses angle to pick the scale degree and ringDepth to select octave within the zone's range.
+
+**Angle normalization** (0 = top/12 o'clock, 1 = full clockwise rotation):
+```
+const normalizedAngle = ((angle + 2 * Math.PI) % (2 * Math.PI)) / (2 * Math.PI);
+```
+Where `angle` comes from `Math.atan2(dx, -dy)` (range [-PI, PI], 0 = top).
+
+**Note selection formula:** Each zone has a set of notes built from `buildScaleNotes(scale, root, octLow, octHigh)`. The notes are split into scale degrees (notes within one octave) and octaves (the range). Angle selects the scale degree, ringDepth selects the octave:
+```
+const scaleSize = SCALES[currentScale].intervals.length; // e.g., 5 for pentatonic
+const degree = Math.floor(normalizedAngle * scaleSize) % scaleSize;
+const octaveRange = zone.octaves[1] - zone.octaves[0]; // e.g., 2 for Crystal (4-6)
+const octave = zone.octaves[0] + Math.floor(ringDepth * (octaveRange + 0.99));
+const noteIndex = (octave - zone.octaves[0]) * scaleSize + degree;
+const clampedIndex = clamp(noteIndex, 0, notes.length - 1);
+```
 
 ---
 
@@ -94,8 +110,8 @@ Note selection uses angle to pick the scale degree and ringDepth to shift octave
 
 ### Touch devices
 
-- Single finger touch + drag = play (equivalent to left-click-hold)
-- Two-finger tap = toggle drone
+- Single finger touch + drag = play (equivalent to left-click-hold). This already works via pointer events (`pointerdown` with `event.pointerType === 'touch'` sets `pointerDownRef`).
+- Two-finger tap = toggle drone. Implement via Touch Events: listen for `touchstart`, and if `event.touches.length === 2`, call `event.preventDefault()` (to suppress pinch-zoom) and toggle drone. Use a short debounce (~300ms) to distinguish from pinch gestures — if a `touchmove` with significant distance occurs before the debounce expires, cancel the drone toggle.
 
 ### Flow mode
 
@@ -122,10 +138,10 @@ Each zone feels like a genuinely different instrument with distinct attack, deca
 ### Pluck (mid ring)
 
 - **Synth**: Triangle oscillator, warmer tone. Slightly longer attack for more body.
-- **Attack**: ~40ms (increase from current 6ms for more expression)
+- **Attack**: ~40ms (increase from current 6ms). Hardcode `attack: 0.04` in the pluck synth constructor (it's currently hardcoded at `0.006`; no per-mood parameterization needed since pluck attack doesn't vary by mood).
 - **Decay**: Medium — notes ring out with sustain
 - **Min note gap**: 80ms — expressive but not spammy
-- **Velocity mapping**: ringDepth controls velocity (0.12–0.35 range). Drag speed modulates note duration — slow drags produce longer, more legato notes.
+- **Velocity mapping**: ringDepth controls velocity (0.12–0.35 range). Drag speed modulates note duration (Pluck only) — slow drags produce longer notes (up to 0.5s), fast drags produce short plucks (0.1s). Other zones use fixed durations.
 - **Octave range**: 3–5 (existing)
 
 ### Sub (outer ring)
@@ -139,7 +155,7 @@ Each zone feels like a genuinely different instrument with distinct attack, deca
 
 ### Synth modifications
 
-The sub-octave layer for the Sub zone can be implemented by triggering two notes simultaneously: the selected note and the note one octave below it (at reduced velocity). No new synth needed — use the existing PolySynth and trigger both pitches.
+The sub-octave layer for the Sub zone is implemented by triggering two notes simultaneously: the selected note at the computed velocity, and the note one octave below it at 60% of that velocity. Increase the Sub synth's `maxPolyphony` from 3 to 6 to accommodate the double-triggering alongside long release tails.
 
 ---
 
@@ -171,7 +187,9 @@ When the cursor moves without left button held, inject very faint splats (10% of
 ### Cursor orb per zone
 
 - Glow color matches zone color (already partially implemented)
-- Size scales: 14px in Crystal, 16px in Pluck, 20px in Sub — reinforcing the weight
+- **Idle size** (hovering without click): 14px in Crystal, 16px in Pluck, 20px in Sub
+- **Playing size** (left-click held): 20px in Crystal, 24px in Pluck, 30px in Sub
+- Transition between sizes uses the existing CSS `transition: width 0.25s ease, height 0.25s ease` — smooth when crossing zone boundaries
 
 ### Drone ring per zone
 
@@ -187,12 +205,47 @@ Replace the current noise-based linear motion with a spiral path through the con
 
 ### Spiral behavior
 
-- The phantom cursor starts near the center (Crystal zone)
-- It spirals outward clockwise, crossing through Crystal → Pluck → Sub
-- At the outer edge, it reverses and spirals inward
-- The spiral speed is tied to the mood's `flowInterval`
-- Noise is added to the spiral path for organic variation (using existing `createNoise2D`)
-- Notes trigger as the phantom cursor moves, following the same zone-specific rules (note gap, velocity, etc.)
+Archimedean spiral with linear radius growth. State is stored in `flowRef.current`:
+
+```
+flowRef.current = {
+  intervalId: null,
+  t: 0,          // continuous time parameter, incremented each step
+  direction: 1,  // 1 = expanding outward, -1 = contracting inward
+};
+```
+
+Each `runFlowStep` call:
+```
+const t = flowRef.current.t;
+const speed = 0.02; // radians per step
+const radiusGrowth = 0.003; // radius expansion per step
+
+// Base spiral position
+let spiralAngle = t * speed * 3; // ~3 rotations per full sweep
+let spiralRadius = t * radiusGrowth * flowRef.current.direction;
+
+// Clamp radius to 0.05–0.95 and reverse direction at bounds
+if (spiralRadius > 0.95) { flowRef.current.direction = -1; }
+if (spiralRadius < 0.05) { flowRef.current.direction = 1; }
+spiralRadius = clamp(spiralRadius, 0.05, 0.95);
+
+// Add noise for organic variation
+const noise = noiseRef.current;
+const noiseX = noise(t * 0.01, 0) * 0.08;
+const noiseY = noise(0, t * 0.01) * 0.08;
+
+// Convert to canvas coordinates
+const cx = rect.width / 2;
+const cy = rect.height / 2;
+const r = Math.min(cx, cy);
+const x = cx + (Math.cos(spiralAngle) * spiralRadius * r) + noiseX * r;
+const y = cy + (Math.sin(spiralAngle) * spiralRadius * r) + noiseY * r;
+
+flowRef.current.t += 1;
+```
+
+The `flowInterval` (from mood audio config) controls how frequently `runFlowStep` is called via `setInterval`, which determines note density. The spiral movement speed is independent — it's the `speed` and `radiusGrowth` constants above.
 
 ### Visual
 
@@ -208,18 +261,26 @@ Replace the current noise-based linear motion with a spiral path through the con
 
 - All zone detection uses distance from canvas center divided by `Math.min(width/2, height/2)`
 - Angle computation uses `Math.atan2(dx, -dy)` where dx/dy are relative to center, giving 0 at top and increasing clockwise
-- Angle is normalized to 0–1 for note mapping: `(angle + Math.PI) / (2 * Math.PI)`
+- Angle is normalized to 0–1 for note mapping: `((angle + 2 * Math.PI) % (2 * Math.PI)) / (2 * Math.PI)` — this correctly gives 0 at 12 o'clock, 0.25 at 3 o'clock, 0.5 at 6 o'clock, 0.75 at 9 o'clock
 
 ### Note selection
 
-Replace x-ratio-based note selection with angle-based:
-```
-const noteCount = notes.length;
-const normalizedAngle = ((Math.atan2(dx, -dy) + Math.PI) / (2 * Math.PI));
-const noteIndex = Math.floor(normalizedAngle * noteCount) % noteCount;
-```
+See the formula in Section 1 ("Note selection formula"). Angle selects scale degree, ringDepth selects octave within the zone's range. These combine to index into the zone's pre-built note array.
 
-Ring depth shifts the octave within the zone's defined range. Each zone already has an octave range (e.g., Crystal 4–6). `ringDepth` interpolates within this range.
+### Velocity formula per zone
+
+Replace the current universal velocity formula with per-zone calculations:
+```
+// Crystal: ringDepth + speed bonus
+velocity = 0.15 + ringDepth * 0.25 + clamp(dragSpeed * 0.002, 0, 0.08);
+
+// Pluck: ringDepth + speed affects duration not velocity
+velocity = 0.12 + ringDepth * 0.23;
+duration = 0.1 + (1 - clamp(dragSpeed / 80, 0, 1)) * 0.4; // slow = longer
+
+// Sub: ringDepth only, deliberate
+velocity = 0.10 + ringDepth * 0.18;
+```
 
 ### Trigger throttling per zone
 
@@ -233,10 +294,12 @@ const NOTE_GAP = { crystal: 30, pluck: 80, sub: 200 }; // ms
 - `getZone(yRatio)` → `getZoneFromPosition(x, y, rect)` — returns `{ zone, angle, ringDepth }`
 - `triggerNote(clientX)` → `triggerNote(x, y)` — uses position for both zone detection and note selection
 - `onPointerDown` — split left/right button behavior
-- `onPointerMove` — only trigger notes when `pointerDownRef.current && event.button === 0`
+- `onPointerMove` — only trigger notes when `pointerDownRef.current` is true (do NOT check `event.button` on move events — it's unreliable). Always inject faint visual splats regardless.
 - `runFlowStep` — spiral path instead of linear noise
 - `injectSplat` — scale radius and intensity per zone
-- Sub synth — trigger sub-octave layer alongside main note
+- `getDroneChord` — replace xRatio-based chord selection with angle-based selection using `getZoneFromPosition`. The drone chord root is determined by the angle at the right-click position, same formula as note selection.
+- `startDrone` — replace `getZone(yRatio)` with `getZoneFromPosition(x, y, rect)` for zone detection
+- Sub synth — trigger sub-octave layer alongside main note, increase maxPolyphony to 6
 
 ### No audio architecture changes
 
