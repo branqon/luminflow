@@ -337,6 +337,10 @@ export default function MusicalWavesV2() {
   const [cursorVisible, setCursorVisible] = useState(false);
   const [graphVersion, setGraphVersion] = useState(0);
 
+  const activeEdgeRef = useRef(null);
+  const [activeEdge, setActiveEdge] = useState(null); // 'top' | 'bottom' | 'left' | 'right' | 'all' | null
+  const edgeThreshold = 80;
+
   const stageRef = useRef(null);
   const canvasRef = useRef(null);
   const cursorRef = useRef(null);
@@ -876,6 +880,22 @@ export default function MusicalWavesV2() {
       setCurrentZone(
         getZone(clamp(mouseRef.current.y / Math.max(1, boundingRef.current?.height || 1), 0, 1))
       );
+
+      const rect = boundingRef.current;
+      if (rect) {
+        const mx = mouseRef.current.x;
+        const my = mouseRef.current.y;
+        let edge = null;
+        if (my < edgeThreshold) edge = 'top';
+        else if (my > rect.height - edgeThreshold) edge = 'bottom';
+        else if (mx < edgeThreshold) edge = 'left';
+        else if (mx > rect.width - edgeThreshold) edge = 'right';
+        if (edge !== activeEdgeRef.current) {
+          activeEdgeRef.current = edge;
+          setActiveEdge(edge);
+        }
+      }
+
       if (audioReadyRef.current) {
         triggerNote(event.clientX);
         if (pointerDownRef.current || droneLatched) refreshDrone();
@@ -1053,38 +1073,6 @@ export default function MusicalWavesV2() {
           }}
         />
 
-        <header className="mw-header">
-          <div className="mw-card mw-top-card">
-            <div className="mw-label">Musical Waves</div>
-            <h1>{mood.label}</h1>
-            <p>{mood.tagline}</p>
-            <div className="mw-chip-row">
-              <span className="mw-chip">{currentRoot}</span>
-              <span className="mw-chip">{SCALES[currentScale].label}</span>
-              <span className="mw-chip">{ZONES[currentZone].label}</span>
-            </div>
-          </div>
-          <div className="mw-chip-row mw-chip-row-right">
-            <span className={`mw-chip ${flowActive ? "active" : ""}`}>Flow {flowActive ? "On" : "Off"}</span>
-            <span className={`mw-chip ${droneActive ? "active warm" : ""}`}>Drone {droneActive ? "On" : "Off"}</span>
-          </div>
-        </header>
-
-        <div className="mw-zone-row">
-          {Object.keys(ZONES).map((zone) => (
-            <span
-              key={zone}
-              className={`mw-chip ${currentZone === zone ? "active" : ""}`}
-              style={{
-                borderColor: currentZone === zone ? colorWithAlpha(mood.zoneColors[zone], 0.38) : "var(--border)",
-                color: currentZone === zone ? colorWithAlpha(mood.zoneColors[zone], 1) : "var(--muted)",
-              }}
-            >
-              {ZONES[zone].label}
-            </span>
-          ))}
-        </div>
-
         {guideVisible && audioStarted && (
           <div className="mw-guide">
             Move left for lower notes, right for brighter notes. Slow drags bloom longer tones.
@@ -1112,75 +1100,59 @@ export default function MusicalWavesV2() {
         )}
       </div>
 
-      <aside className="mw-dock">
-        <section className="mw-card">
-          <div className="mw-label">Mood Presets</div>
-          <div className="mw-pill-row">
-            {Object.entries(MOODS).map(([key, preset]) => (
-              <button
-                key={key}
-                className={`mw-button ${currentMood === key ? "active" : ""}`}
-                onClick={() => applyMood(key)}
-              >
-                {preset.label}
-              </button>
-            ))}
-          </div>
-        </section>
+      {/* Bottom edge — Mood selector */}
+      <div className={`mw-edge mw-edge-bottom ${activeEdge === 'bottom' || activeEdge === 'all' ? 'visible' : ''}`}>
+        <div className="mw-edge-content">
+          {Object.entries(MOODS).map(([key, preset]) => (
+            <button key={key} className={`mw-edge-btn ${currentMood === key ? 'active' : ''}`}
+              onClick={() => applyMood(key)}>
+              {preset.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
-        <section className="mw-card">
-          <div className="mw-label">Pitch</div>
-          <div className="mw-field-row">
-            <label className="mw-field">
-              <span>Key</span>
-              <select value={currentRoot} onChange={changeRoot}>
-                {ROOT_OPTIONS.map((root) => (
-                  <option key={root} value={root}>
-                    {root}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button
-              className={`mw-button ${showExperimentalScales ? "active" : ""}`}
-              onClick={() => setShowExperimentalScales((value) => !value)}
-            >
-              {showExperimentalScales ? "Safe Only" : "More Colors"}
+      {/* Right edge — Pitch controls */}
+      <div className={`mw-edge mw-edge-right ${activeEdge === 'right' || activeEdge === 'all' ? 'visible' : ''}`}>
+        <div className="mw-edge-content">
+          <select value={currentRoot} onChange={changeRoot} className="mw-edge-select">
+            {ROOT_OPTIONS.map((root) => (<option key={root} value={root}>{root}</option>))}
+          </select>
+          {visibleScaleKeys.map((key) => (
+            <button key={key} className={`mw-edge-btn ${currentScale === key ? 'active' : ''}`}
+              onClick={() => changeScale(key)}>
+              {SCALES[key].label}
             </button>
-          </div>
-          <div className="mw-pill-row">
-            {visibleScaleKeys.map((key) => (
-              <button
-                key={key}
-                className={`mw-button ${currentScale === key ? "active" : ""}`}
-                onClick={() => changeScale(key)}
-              >
-                {SCALES[key].label}
-              </button>
-            ))}
-          </div>
-        </section>
+          ))}
+          <button className={`mw-edge-btn ${showExperimentalScales ? 'active' : ''}`}
+            onClick={() => setShowExperimentalScales(v => !v)}>
+            {showExperimentalScales ? 'Safe Only' : 'More Colors'}
+          </button>
+        </div>
+      </div>
 
-        <section className="mw-card">
-          <div className="mw-label">Scene</div>
-          <div className="mw-pill-row">
-            <button className={`mw-button ${flowEnabled ? "active" : ""}`} onClick={toggleFlow}>
-              Flow
-            </button>
-            <button className={`mw-button ${droneLatched ? "active warm" : ""}`} onClick={toggleDrone}>
-              Drone
-            </button>
-            <button className="mw-button" onClick={copyLink}>
-              {copyStatus === "copied"
-                ? "Link Copied"
-                : copyStatus === "failed"
-                  ? "Copy Failed"
-                  : "Share Link"}
-            </button>
-          </div>
-          <p className="mw-note">Flow keeps the field moving on its own. Drone locks in a soft bed while you paint over it.</p>
-        </section>
-      </aside>
+      {/* Left edge — Zone selector */}
+      <div className={`mw-edge mw-edge-left ${activeEdge === 'left' || activeEdge === 'all' ? 'visible' : ''}`}>
+        <div className="mw-edge-content">
+          {Object.keys(ZONES).map((zone) => (
+            <span key={zone} className={`mw-edge-glyph ${currentZone === zone ? 'active' : ''}`}
+              style={currentZone === zone ? { color: colorWithAlpha(mood.zoneColors[zone], 1) } : {}}>
+              {ZONES[zone].label}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* Top edge — Scene toggles */}
+      <div className={`mw-edge mw-edge-top ${activeEdge === 'top' || activeEdge === 'all' ? 'visible' : ''}`}>
+        <div className="mw-edge-content">
+          <button className={`mw-edge-btn ${flowEnabled ? 'active' : ''}`} onClick={toggleFlow}>Flow</button>
+          <button className={`mw-edge-btn ${droneLatched ? 'active warm' : ''}`} onClick={toggleDrone}>Drone</button>
+          <button className="mw-edge-btn" onClick={copyLink}>
+            {copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Failed' : 'Share'}
+          </button>
+        </div>
+      </div>
 
       <style>{`
         * { box-sizing: border-box; }
@@ -1208,7 +1180,6 @@ export default function MusicalWavesV2() {
         }
         .mw-stage { position: absolute; inset: 0; cursor: none; touch-action: none; }
         .mw-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-        .mw-canvas-glow { mix-blend-mode: screen; pointer-events: none; }
         .mw-cursor {
           position: absolute;
           top: 0;
@@ -1220,81 +1191,6 @@ export default function MusicalWavesV2() {
           pointer-events: none;
           transition: opacity 0.25s ease, box-shadow 0.35s ease;
           transform: translate3d(-120px, -120px, 0);
-        }
-        .mw-header {
-          position: absolute;
-          top: 18px;
-          left: 18px;
-          right: 18px;
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          gap: 12px;
-          pointer-events: none;
-          z-index: 10;
-        }
-        .mw-card {
-          border: 1px solid var(--border);
-          background: linear-gradient(180deg, rgba(255,255,255,0.06), var(--surface));
-          backdrop-filter: blur(18px);
-          -webkit-backdrop-filter: blur(18px);
-          box-shadow: 0 26px 54px rgba(0,0,0,0.26);
-        }
-        .mw-top-card {
-          max-width: 420px;
-          padding: 16px 18px;
-          border-radius: 24px;
-        }
-        .mw-label {
-          color: var(--muted);
-          font-size: 10px;
-          letter-spacing: 0.18em;
-          text-transform: uppercase;
-        }
-        .mw-top-card h1, .mw-prompt h2 {
-          margin: 10px 0 8px;
-          font-family: Georgia, "Times New Roman", serif;
-          font-weight: 600;
-          letter-spacing: 0.02em;
-        }
-        .mw-top-card h1 { font-size: clamp(28px, 4vw, 40px); line-height: 1; }
-        .mw-top-card p, .mw-note, .mw-prompt p {
-          margin: 0;
-          color: var(--muted);
-          line-height: 1.55;
-          font-size: 12px;
-        }
-        .mw-chip-row, .mw-pill-row, .mw-field-row {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-        }
-        .mw-chip-row { margin-top: 12px; }
-        .mw-chip-row-right { justify-content: flex-end; }
-        .mw-chip {
-          display: inline-flex;
-          align-items: center;
-          min-height: 30px;
-          padding: 0 12px;
-          border-radius: 999px;
-          border: 1px solid var(--border);
-          background: rgba(255,255,255,0.04);
-          color: var(--muted);
-          font-size: 10px;
-          letter-spacing: 0.14em;
-          text-transform: uppercase;
-        }
-        .mw-chip.active { color: var(--text); background: rgba(255,255,255,0.1); }
-        .mw-chip.warm.active { color: rgba(255,230,205,0.95); }
-        .mw-zone-row {
-          position: absolute;
-          left: 18px;
-          top: 50%;
-          transform: translateY(-50%);
-          display: grid;
-          gap: 8px;
-          z-index: 10;
-          pointer-events: none;
         }
         .mw-guide {
           position: absolute;
@@ -1329,101 +1225,142 @@ export default function MusicalWavesV2() {
           border-radius: 28px;
           text-align: center;
           pointer-events: auto;
-        }
-        .mw-prompt h2 { font-size: clamp(32px, 6vw, 48px); line-height: 0.98; }
-        .mw-prompt p { margin-bottom: 20px; font-size: 13px; }
-        .mw-dock {
-          position: absolute;
-          left: 18px;
-          right: 18px;
-          bottom: 18px;
-          display: grid;
-          grid-template-columns: 1.15fr 1fr 0.95fr;
-          gap: 12px;
-          z-index: 30;
-        }
-        .mw-dock .mw-card {
-          padding: 16px;
-          border-radius: 24px;
-          display: grid;
-          gap: 12px;
-        }
-        .mw-field-row { justify-content: space-between; align-items: flex-end; }
-        .mw-field { display: grid; gap: 8px; min-width: 110px; }
-        .mw-field span { color: var(--muted); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; }
-        .mw-field select {
-          min-height: 42px;
-          padding: 0 14px;
-          border-radius: 14px;
           border: 1px solid var(--border);
-          background: rgba(255,255,255,0.05);
-          color: var(--text);
-          font: inherit;
+          background: linear-gradient(180deg, rgba(255,255,255,0.06), var(--surface));
+          backdrop-filter: blur(18px);
+          -webkit-backdrop-filter: blur(18px);
+          box-shadow: 0 26px 54px rgba(0,0,0,0.26);
         }
-        .mw-button {
-          min-height: 40px;
+        .mw-prompt h2 {
+          margin: 10px 0 8px;
+          font-family: Georgia, "Times New Roman", serif;
+          font-weight: 600;
+          letter-spacing: 0.02em;
+          font-size: clamp(32px, 6vw, 48px);
+          line-height: 0.98;
+        }
+        .mw-prompt p {
+          margin: 0 0 20px;
+          color: var(--muted);
+          line-height: 1.55;
+          font-size: 13px;
+        }
+        .mw-prompt .mw-label {
+          color: var(--muted);
+          font-size: 10px;
+          letter-spacing: 0.18em;
+          text-transform: uppercase;
+        }
+        .mw-prompt .mw-button.primary {
+          min-height: 48px;
           padding: 0 14px;
           border-radius: 999px;
-          border: 1px solid rgba(255,255,255,0.06);
-          background: rgba(255,255,255,0.04);
-          color: var(--muted);
+          background: linear-gradient(135deg, rgba(255,255,255,0.14), rgba(255,255,255,0.05));
+          color: var(--text);
+          border: 1px solid var(--border);
           font: inherit;
           cursor: pointer;
-          transition: transform 0.18s ease, border-color 0.18s ease, color 0.18s ease, background 0.18s ease;
         }
-        .mw-button:hover, .mw-button:focus-visible {
-          transform: translateY(-1px);
+        .mw-edge {
+          position: absolute;
+          z-index: 10;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          pointer-events: none;
+          opacity: 0;
+          transition: opacity 0.3s ease;
+        }
+        .mw-edge.visible, .mw-edge:focus-within {
+          opacity: 1;
+          pointer-events: auto;
+        }
+        .mw-edge-bottom {
+          bottom: 0; left: 0; right: 0;
+          height: 80px;
+          padding: 0 20px 20px;
+        }
+        .mw-edge-top {
+          top: 0; left: 0; right: 0;
+          height: 80px;
+          padding: 20px 20px 0;
+        }
+        .mw-edge-left {
+          left: 0; top: 0; bottom: 0;
+          width: 80px;
+          padding: 0 0 0 20px;
+          flex-direction: column;
+        }
+        .mw-edge-right {
+          right: 0; top: 0; bottom: 0;
+          width: 200px;
+          padding: 0 20px 0 0;
+          flex-direction: column;
+        }
+        .mw-edge-content {
+          display: flex;
+          gap: 10px;
+          align-items: center;
+        }
+        .mw-edge-left .mw-edge-content,
+        .mw-edge-right .mw-edge-content {
+          flex-direction: column;
+        }
+        .mw-edge-btn {
+          min-height: 40px;
+          padding: 0 18px;
+          border-radius: 999px;
+          border: 1px solid rgba(255,255,255,0.08);
+          background: rgba(255,255,255,0.04);
+          backdrop-filter: blur(12px);
+          color: var(--muted);
+          font-family: 'Inter', system-ui, sans-serif;
+          font-size: 12px;
+          font-weight: 400;
+          letter-spacing: 0.06em;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+        .mw-edge-btn:hover, .mw-edge-btn:focus-visible {
           color: var(--text);
           border-color: var(--border);
+          background: rgba(255,255,255,0.08);
           outline: none;
         }
-        .mw-button.active {
+        .mw-edge-btn.active {
           color: var(--text);
           background: rgba(255,255,255,0.1);
-          border-color: rgba(255,255,255,0.22);
+          border-color: rgba(255,255,255,0.2);
         }
-        .mw-button.warm.active {
+        .mw-edge-btn.warm.active {
           border-color: rgba(255,200,145,0.36);
           color: rgba(255,233,206,0.96);
         }
-        .mw-button.primary {
-          min-height: 48px;
-          background: linear-gradient(135deg, rgba(255,255,255,0.14), rgba(255,255,255,0.05));
+        .mw-edge-select {
+          min-height: 42px;
+          padding: 0 14px;
+          border-radius: 14px;
+          border: 1px solid rgba(255,255,255,0.08);
+          background: rgba(255,255,255,0.05);
+          backdrop-filter: blur(12px);
           color: var(--text);
-          border-color: var(--border);
+          font-family: 'Inter', system-ui, sans-serif;
+          font-size: 12px;
         }
-        .mw-note { font-size: 11px; }
-        @media (max-width: 1120px) {
-          .mw-dock { grid-template-columns: 1fr; }
+        .mw-edge-glyph {
+          font-family: 'Inter', system-ui, sans-serif;
+          font-size: 11px;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: var(--muted);
+          transition: color 0.3s ease;
         }
-        @media (max-width: 760px) {
-          .mw-stage { cursor: default; }
-          .mw-header {
-            top: 14px;
-            left: 14px;
-            right: 14px;
-            flex-direction: column;
-            align-items: stretch;
-          }
-          .mw-zone-row {
-            top: auto;
-            left: 14px;
-            right: 14px;
-            bottom: 228px;
-            transform: none;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-          }
-          .mw-guide {
-            top: 122px;
-            border-radius: 24px;
-            font-size: 11px;
-          }
-          .mw-dock {
-            left: 14px;
-            right: 14px;
-            bottom: 14px;
-          }
-          .mw-dock .mw-card, .mw-prompt { padding: 14px; }
+        .mw-edge-glyph.active {
+          animation: pulse-glow 2s ease-in-out infinite;
+        }
+        @keyframes pulse-glow {
+          0%, 100% { opacity: 0.8; }
+          50% { opacity: 1; }
         }
       `}</style>
     </div>
