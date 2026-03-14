@@ -865,8 +865,10 @@ export default function MusicalWavesV2() {
     [drawFrame]
   );
 
+  const audioStartingRef = useRef(false);
   const startAudio = useCallback(async () => {
-    if (audioStarted) return;
+    if (audioStarted || audioStartingRef.current) return;
+    audioStartingRef.current = true;
     await Tone.start();
     rebuildNotes(currentScale, currentRoot);
     await buildAudioGraph(currentMood);
