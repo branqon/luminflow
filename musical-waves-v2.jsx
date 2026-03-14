@@ -337,6 +337,7 @@ export default function MusicalWavesV2() {
   const [volume, setVolume] = useState(-12); // dB, range -40 to 0
   const [copyStatus, setCopyStatus] = useState("idle");
   const [cursorVisible, setCursorVisible] = useState(false);
+  const [pointerDown, setPointerDown] = useState(false);
   const [graphVersion, setGraphVersion] = useState(0);
   const [webglAvailable, setWebglAvailable] = useState(true);
 
@@ -580,7 +581,7 @@ export default function MusicalWavesV2() {
     const rect = stageRef.current.getBoundingClientRect();
     boundingRef.current = rect;
     if (canvasRef.current) {
-      if (!fluidSimRef.current) {
+      if (!fluidSimRef.current && webglAvailable) {
         fluidSimRef.current = new window.FluidSim();
         const success = fluidSimRef.current.init(canvasRef.current);
         if (!success) {
@@ -588,8 +589,10 @@ export default function MusicalWavesV2() {
           fluidSimRef.current = null;
         }
       }
-      fluidSimRef.current.resize(rect.width, rect.height);
-      fluidSimRef.current.setMoodParams(themeRef.current.fluid);
+      if (fluidSimRef.current) {
+        fluidSimRef.current.resize(rect.width, rect.height);
+        fluidSimRef.current.setMoodParams(themeRef.current.fluid);
+      }
     }
   }, []);
 
@@ -940,6 +943,7 @@ export default function MusicalWavesV2() {
 
   const finishPointer = useCallback(() => {
     pointerDownRef.current = false;
+    setPointerDown(false);
   }, []);
 
   const onPointerDown = useCallback(
@@ -988,6 +992,7 @@ export default function MusicalWavesV2() {
 
       // Left-click: start playing
       pointerDownRef.current = true;
+      setPointerDown(true);
       triggerNote(mouseRef.current.x, mouseRef.current.y);
       event.currentTarget.setPointerCapture?.(event.pointerId);
     },
@@ -1075,12 +1080,12 @@ export default function MusicalWavesV2() {
     return () => {
       cancelled = true;
     };
-  }, [audioStarted, buildAudioGraph, currentMood, droneLatched, moodTransition, startDrone]);
+  }, [audioStarted, buildAudioGraph, currentMood, moodTransition]);
 
   useEffect(() => {
     if (!audioStarted || !audioReadyRef.current) return;
-    if (droneLatched || droneActive) startDrone(droneLatched ? "latched" : "touch");
-  }, [audioStarted, currentRoot, currentScale, droneActive, droneLatched, startDrone]);
+    if (droneLatched) startDrone("latched");
+  }, [audioStarted, currentRoot, currentScale, droneLatched, startDrone]);
 
   useEffect(() => {
     if (!audioStarted || !flowEnabled || !audioReadyRef.current) {
@@ -1238,7 +1243,7 @@ export default function MusicalWavesV2() {
 
         <div
           ref={cursorRef}
-          className={`mw-cursor ${pointerDownRef.current ? 'playing' : ''} ${activeEdge ? 'edge' : ''}`}
+          className={`mw-cursor ${pointerDown ? 'playing' : ''} ${activeEdge ? 'edge' : ''}`}
           style={{
             opacity: audioStarted && cursorVisible ? 1 : 0,
             boxShadow: activeEdge ? 'none' : `0 0 24px 6px ${colorWithAlpha(mood.zoneColors[currentZone], 0.4)}, 0 0 48px 16px ${colorWithAlpha(mood.zoneColors[currentZone], 0.15)}`,
@@ -1265,11 +1270,8 @@ export default function MusicalWavesV2() {
             className="mw-intro"
             onClick={introPhase === 'invite' || introPhase === 'ripple' ? async (e) => {
               e.stopPropagation();
-              await Tone.start();
-              rebuildNotes(currentScale, currentRoot);
-              await buildAudioGraph(currentMood);
-              setAudioStarted(true);
-              setIntroPhase('playing');
+              await startAudio();
+              // Bloom at touch point
               if (fluidSimRef.current && boundingRef.current) {
                 const rect = boundingRef.current;
                 const color = themeRef.current.zoneColors.pluck.map(c => c / 255);
