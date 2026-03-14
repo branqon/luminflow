@@ -1373,6 +1373,35 @@ export default function MusicalWavesV2() {
           0%, 100% { opacity: 0.8; }
           50% { opacity: 1; }
         }
+
+        .mw-watermark {
+          position: absolute;
+          bottom: 24px;
+          left: 24px;
+          pointer-events: none;
+          z-index: 5;
+          mix-blend-mode: soft-light;
+          opacity: 0.15;
+          transition: opacity 0.5s ease;
+        }
+        .mw-watermark.bright {
+          opacity: 0.35;
+        }
+        .mw-watermark-mood {
+          font-family: 'Playfair Display', Georgia, serif;
+          font-size: 72px;
+          font-weight: 600;
+          line-height: 1;
+          letter-spacing: 0.02em;
+        }
+        .mw-watermark-info {
+          font-family: 'Inter', system-ui, sans-serif;
+          font-size: 13px;
+          font-weight: 300;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          margin-top: 8px;
+        }
       `}</style>
     </div>
   );
