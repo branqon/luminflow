@@ -1120,7 +1120,6 @@ export default function MusicalWavesV2() {
         "--muted": mood.muted,
       }}
     >
-      <div className="mw-backdrop" />
       <div
         ref={stageRef}
         className="mw-stage"
@@ -1272,20 +1271,7 @@ export default function MusicalWavesV2() {
           overflow: hidden;
           color: var(--text);
           font-family: 'Inter', system-ui, sans-serif;
-          background:
-            radial-gradient(circle at 18% 18%, var(--halo), transparent 28%),
-            radial-gradient(circle at 82% 24%, rgba(255,255,255,0.06), transparent 22%),
-            linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
-        }
-        .mw-backdrop {
-          position: absolute;
-          inset: -10%;
-          background:
-            radial-gradient(circle at 50% 42%, rgba(255,255,255,0.03), transparent 26%),
-            linear-gradient(120deg, rgba(255,255,255,0.03), transparent 30%);
-          filter: blur(12px);
-          transform: scale(1.1);
-          pointer-events: none;
+          background: linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
         }
         .mw-stage { position: absolute; inset: 0; cursor: none; touch-action: none; }
         .mw-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
