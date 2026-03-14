@@ -1,54 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import * as Tone from "tone";
 
-function createNoise2D() {
-  const perm = new Uint8Array(512);
-  const grad = [
-    [1, 1],
-    [-1, 1],
-    [1, -1],
-    [-1, -1],
-    [1, 0],
-    [-1, 0],
-    [0, 1],
-    [0, -1],
-  ];
-
-  for (let i = 0; i < 256; i += 1) perm[i] = i;
-  for (let i = 255; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [perm[i], perm[j]] = [perm[j], perm[i]];
-  }
-  for (let i = 0; i < 256; i += 1) perm[i + 256] = perm[i];
-
-  const dot = (g, x, y) => g[0] * x + g[1] * y;
-  const fade = (t) => t * t * t * (t * (t * 6 - 15) + 10);
-  const lerp = (a, b, t) => a + t * (b - a);
-
-  return (x, y) => {
-    const X = Math.floor(x) & 255;
-    const Y = Math.floor(y) & 255;
-    const xf = x - Math.floor(x);
-    const yf = y - Math.floor(y);
-    const u = fade(xf);
-    const v = fade(yf);
-
-    return lerp(
-      lerp(
-        dot(grad[perm[perm[X] + Y] % 8], xf, yf),
-        dot(grad[perm[perm[X + 1] + Y] % 8], xf - 1, yf),
-        u
-      ),
-      lerp(
-        dot(grad[perm[perm[X] + Y + 1] % 8], xf, yf - 1),
-        dot(grad[perm[perm[X + 1] + Y + 1] % 8], xf - 1, yf - 1),
-        u
-      ),
-      v
-    );
-  };
-}
-
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 
 const SCALES = {
@@ -67,6 +19,12 @@ const ZONES = {
   crystal: { octaves: [4, 6], label: "Crystal" },
   pluck: { octaves: [3, 5], label: "Pluck" },
   sub: { octaves: [1, 3], label: "Sub" },
+};
+
+const SPLAT_SCALE = {
+  crystal: { radius: 0.5, intensity: 1.4, velocityMul: 1.5 },
+  pluck:   { radius: 1.0, intensity: 1.0, velocityMul: 1.0 },
+  sub:     { radius: 2.0, intensity: 0.6, velocityMul: 0.5 },
 };
 
 const MOODS = {
@@ -370,7 +328,6 @@ export default function MusicalWavesV2() {
   const droneSigRef = useRef("");
   const droneChangeRef = useRef(0);
   const pointerDownRef = useRef(false);
-  const noiseRef = useRef(null);
   const rafRef = useRef(null);
   const lastNoteTimeRef = useRef(0);
   const themeRef = useRef(MOODS[initialStateRef.current.mood]);
@@ -510,7 +467,7 @@ export default function MusicalWavesV2() {
 
       const crystal = new Tone.PolySynth(Tone.Synth, {
         maxPolyphony: 5,
-        voice: Tone.Synth,
+
         options: {
           oscillator: { type: "fatsine", spread: 18, count: 3 },
           envelope: {
@@ -525,7 +482,7 @@ export default function MusicalWavesV2() {
 
       const pluck = new Tone.PolySynth(Tone.Synth, {
         maxPolyphony: 5,
-        voice: Tone.Synth,
+
         options: {
           oscillator: { type: "triangle" },
           envelope: {
@@ -540,7 +497,7 @@ export default function MusicalWavesV2() {
 
       const sub = new Tone.PolySynth(Tone.Synth, {
         maxPolyphony: 6,
-        voice: Tone.Synth,
+
         options: {
           oscillator: { type: "sine" },
           envelope: {
@@ -555,7 +512,7 @@ export default function MusicalWavesV2() {
 
       const drone = new Tone.PolySynth(Tone.Synth, {
         maxPolyphony: 4,
-        voice: Tone.Synth,
+
         options: {
           oscillator: { type: "sine" },
           envelope: {
@@ -614,12 +571,6 @@ export default function MusicalWavesV2() {
       mouse.set = true;
     }
   }, []);
-
-  const SPLAT_SCALE = {
-    crystal: { radius: 0.5, intensity: 1.4, velocityMul: 1.5 },
-    pluck:   { radius: 1.0, intensity: 1.0, velocityMul: 1.0 },
-    sub:     { radius: 2.0, intensity: 0.6, velocityMul: 0.5 },
-  };
 
   const injectSplat = useCallback((x, y, dx, dy, zone) => {
     const sim = fluidSimRef.current;
@@ -876,13 +827,18 @@ export default function MusicalWavesV2() {
     setIntroPhase('playing');
   }, [audioStarted, buildAudioGraph, currentMood, currentRoot, currentScale, rebuildNotes]);
 
+  const moodTransitionRef = useRef(false);
   const applyMood = useCallback(async (key) => {
-    if (key === currentMood || moodTransition) return;
+    if (key === currentMood || moodTransitionRef.current) return;
+    moodTransitionRef.current = true;
     setMoodTransition('draining');
 
     // Audio keeps playing during the drain phase (800ms)
     await new Promise(r => setTimeout(r, 800));
     setMoodTransition('dark');
+
+    // Rebuild notes synchronously before audio graph so scale is ready
+    rebuildNotes(MOODS[key].defaultScale, MOODS[key].defaultRoot);
 
     // NOW dispose old audio and rebuild during the dark beat
     setCurrentMood(key);
@@ -904,8 +860,9 @@ export default function MusicalWavesV2() {
 
     await new Promise(r => setTimeout(r, 600));
     setMoodTransition(null);
+    moodTransitionRef.current = false;
     lastInteractionRef.current = Date.now();
-  }, [currentMood, moodTransition, audioStarted, buildAudioGraph]);
+  }, [currentMood, audioStarted, buildAudioGraph, rebuildNotes]);
 
   const changeScale = useCallback((key) => {
     setCurrentScale(key);
@@ -1177,7 +1134,6 @@ export default function MusicalWavesV2() {
   }, [introPhase]);
 
   useEffect(() => {
-    noiseRef.current = createNoise2D();
     initSize();
 
     const handleResize = () => {
