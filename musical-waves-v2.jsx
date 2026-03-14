@@ -271,6 +271,12 @@ function colorWithAlpha(color, alpha) {
 
 const NOTE_GAP = { crystal: 30, pluck: 80, sub: 200 }; // ms per zone
 
+const SPLAT_SCALE = {
+  crystal: { radius: 0.5, intensity: 1.4, velocityMul: 1.5 },
+  pluck:   { radius: 1.0, intensity: 1.0, velocityMul: 1.0 },
+  sub:     { radius: 2.0, intensity: 0.6, velocityMul: 0.5 },
+};
+
 function getZoneFromPosition(x, y, rect) {
   const cx = rect.width / 2;
   const cy = rect.height / 2;
@@ -547,7 +553,7 @@ export default function MusicalWavesV2() {
         options: {
           oscillator: { type: "triangle" },
           envelope: {
-            attack: 0.006,
+            attack: 0.04,
             decay: 0.24,
             sustain: 0.03,
             release: settings.pluckRelease,
@@ -557,12 +563,12 @@ export default function MusicalWavesV2() {
       }).connect(delay);
 
       const sub = new Tone.PolySynth(Tone.Synth, {
-        maxPolyphony: 3,
+        maxPolyphony: 6,
         voice: Tone.Synth,
         options: {
           oscillator: { type: "sine" },
           envelope: {
-            attack: settings.subAttack,
+            attack: 0.15,
             decay: 0.55,
             sustain: 0.26,
             release: settings.subRelease,
@@ -636,9 +642,19 @@ export default function MusicalWavesV2() {
     const rect = boundingRef.current;
     const fluid = themeRef.current.fluid;
     const color = themeRef.current.zoneColors[zone].map(c => c / 255);
-    const scale = fluid.noteSplatScale?.[zone] || 1.0;
-    const radius = fluid.splatRadius * scale;
-    sim.addSplat(x / rect.width, 1.0 - y / rect.height, dx * 0.001, -dy * 0.001, color, radius);
+    const scale = SPLAT_SCALE[zone] || SPLAT_SCALE.pluck;
+    const noteScale = fluid.noteSplatScale?.[zone] || 1.0;
+    const radius = fluid.splatRadius * scale.radius * noteScale;
+    const adjustedColor = color.map(c => Math.min(c * scale.intensity, 1.0));
+
+    sim.addSplat(
+      x / rect.width,
+      1.0 - y / rect.height,
+      dx * 0.001 * scale.velocityMul,
+      -dy * 0.001 * scale.velocityMul,
+      adjustedColor,
+      radius
+    );
   }, []);
 
   const getDroneChord = useCallback((zone) => {
@@ -858,7 +874,15 @@ export default function MusicalWavesV2() {
       drawFrame();
 
       if (cursorRef.current) {
-        cursorRef.current.style.transform = `translate3d(${mouse.sx - 5}px, ${mouse.sy - 5}px, 0)`;
+        const curZone = boundingRef.current
+          ? getZoneFromPosition(mouse.sx, mouse.sy, boundingRef.current).zone
+          : 'pluck';
+        const halfSize = pointerDownRef.current
+          ? { crystal: 10, pluck: 12, sub: 15 }[curZone]
+          : { crystal: 7, pluck: 8, sub: 10 }[curZone];
+        cursorRef.current.style.transform = `translate3d(${mouse.sx - halfSize}px, ${mouse.sy - halfSize}px, 0)`;
+        cursorRef.current.style.width = `${halfSize * 2}px`;
+        cursorRef.current.style.height = `${halfSize * 2}px`;
       }
 
       rafRef.current = requestAnimationFrame(tick);
@@ -1241,6 +1265,8 @@ export default function MusicalWavesV2() {
           <div className="mw-drone-ring" style={{
             left: dronePositionRef.current.x,
             top: dronePositionRef.current.y,
+            width: { crystal: 50, pluck: 80, sub: 120 }[currentZone],
+            height: { crystal: 50, pluck: 80, sub: 120 }[currentZone],
             borderColor: colorWithAlpha(mood.zoneColors[currentZone], 0.3),
           }} />
         )}
