@@ -391,7 +391,7 @@ export default function MusicalWavesV2() {
   const pointerDownRef = useRef(false);
   const noiseRef = useRef(null);
   const rafRef = useRef(null);
-  const lastNoteTimeRef = useRef(0);
+  const lastNoteTimeRef = useRef({ crystal: 0, pluck: 0, sub: 0 });
   const themeRef = useRef(MOODS[initialStateRef.current.mood]);
   const idleStepRef = useRef(0);
   const lastInteractionRef = useRef(Date.now());
@@ -694,42 +694,66 @@ export default function MusicalWavesV2() {
   }, [droneActive, droneLatched, startDrone]);
 
   const triggerNote = useCallback(
-    (clientX) => {
+    (x, y) => {
       if (!audioReadyRef.current || !boundingRef.current) return;
 
       const rect = boundingRef.current;
-      const mouse = mouseRef.current;
-      const zone = getZoneFromPosition(mouseRef.current.x, mouseRef.current.y, boundingRef.current).zone;
+      const pos = getZoneFromPosition(x, y, rect);
+      const { zone, angle, ringDepth } = pos;
       const notes = scaleNotesRef.current[zone];
-
       if (!notes || !notes.length) return;
 
-      if (Tone.now() - lastNoteTimeRef.current < 0.05) return;
+      // Per-zone throttle
+      const now = Tone.now();
+      if ((now - lastNoteTimeRef.current[zone]) * 1000 < NOTE_GAP[zone]) return;
+      lastNoteTimeRef.current[zone] = now;
 
-      lastNoteTimeRef.current = Tone.now();
       setCurrentZone(zone);
 
-      const xRatio = clamp((clientX - rect.left) / Math.max(1, rect.width), 0, 1);
-      const noteIndex = clamp(Math.floor(xRatio * (notes.length - 1)), 0, notes.length - 1);
+      // Angle -> scale degree, ringDepth -> octave
+      const scaleSize = SCALES[currentScale].intervals.length;
+      const degree = Math.floor(angle * scaleSize) % scaleSize;
+      const octaveRange = ZONES[zone].octaves[1] - ZONES[zone].octaves[0];
+      const octave = Math.floor(ringDepth * (octaveRange + 0.99));
+      const noteIndex = clamp(octave * scaleSize + degree, 0, notes.length - 1);
       const note = notes[noteIndex];
-      const synth = synthsRef.current[zone];
 
+      const synth = synthsRef.current[zone];
       if (!synth) return;
 
-      const speed = clamp(mouse.vs, 0, 90);
-      const bloom = 1 - speed / 90;
-      const duration = 0.08 + bloom * 0.32;
-      const velocity = 0.12 + (1 - yRatio) * 0.18 + bloom * 0.18;
+      const mouse = mouseRef.current;
+      const dragSpeed = mouse.vs;
+
+      // Per-zone velocity and duration
+      let velocity, duration;
+      if (zone === 'crystal') {
+        velocity = 0.15 + ringDepth * 0.25 + clamp(dragSpeed * 0.002, 0, 0.08);
+        duration = 0.12;
+      } else if (zone === 'pluck') {
+        velocity = 0.12 + ringDepth * 0.23;
+        duration = 0.1 + (1 - clamp(dragSpeed / 80, 0, 1)) * 0.4;
+      } else {
+        velocity = 0.10 + ringDepth * 0.18;
+        duration = 0.3;
+      }
 
       try {
         synth.triggerAttackRelease(note, duration, Tone.now(), velocity);
+        // Sub-octave layer for Sub zone
+        if (zone === 'sub') {
+          const subOctaveIndex = clamp(noteIndex - scaleSize, 0, notes.length - 1);
+          if (subOctaveIndex !== noteIndex) {
+            synth.triggerAttackRelease(notes[subOctaveIndex], duration, Tone.now(), velocity * 0.6);
+          }
+        }
       } catch (error) {
         // Ignore transient audio errors.
       }
 
-      injectSplat(mouse.x, mouse.y, mouse.x - mouse.lx, mouse.y - mouse.ly, zone);
+      // Visual feedback
+      injectSplat(x, y, mouse.x - mouse.lx, mouse.y - mouse.ly, zone);
     },
-    [injectSplat]
+    [currentScale, injectSplat]
   );
 
   const runFlowStep = useCallback(() => {
@@ -931,7 +955,7 @@ export default function MusicalWavesV2() {
       updateMouse(event.clientX, event.clientY);
       if (event.pointerType === "mouse") setCursorVisible(true);
       if (!audioStarted) await startAudio();
-      triggerNote(event.clientX);
+      triggerNote(mouseRef.current.x, mouseRef.current.y);
       startDrone("touch");
       event.currentTarget.setPointerCapture?.(event.pointerId);
     },
@@ -963,7 +987,7 @@ export default function MusicalWavesV2() {
       }
 
       if (audioReadyRef.current) {
-        triggerNote(event.clientX);
+        triggerNote(mouseRef.current.x, mouseRef.current.y);
         if (pointerDownRef.current || droneLatched) refreshDrone();
       }
     },
