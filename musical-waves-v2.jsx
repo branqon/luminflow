@@ -943,23 +943,37 @@ export default function MusicalWavesV2() {
 
   const finishPointer = useCallback(() => {
     pointerDownRef.current = false;
-    if (!droneLatched) stopDrone();
-  }, [droneLatched, stopDrone]);
+  }, []);
 
   const onPointerDown = useCallback(
     async (event) => {
-      if (event.button !== undefined && event.button !== 0) return;
       event.preventDefault();
-      pointerDownRef.current = true;
       lastInteractionRef.current = Date.now();
       updateMouse(event.clientX, event.clientY);
       if (event.pointerType === "mouse") setCursorVisible(true);
+
       if (!audioStarted) await startAudio();
+
+      if (event.button === 2) {
+        // Right-click: toggle drone
+        if (droneLatched) {
+          stopDrone();
+          setDroneLatched(false);
+        } else {
+          setDroneLatched(true);
+          startDrone("latched");
+        }
+        return;
+      }
+
+      if (event.button !== 0) return;
+
+      // Left-click: start playing
+      pointerDownRef.current = true;
       triggerNote(mouseRef.current.x, mouseRef.current.y);
-      startDrone("touch");
       event.currentTarget.setPointerCapture?.(event.pointerId);
     },
-    [audioStarted, startAudio, startDrone, triggerNote, updateMouse]
+    [audioStarted, droneLatched, startAudio, startDrone, stopDrone, triggerNote, updateMouse]
   );
 
   const onPointerMove = useCallback(
@@ -968,27 +982,48 @@ export default function MusicalWavesV2() {
       else setCursorVisible(false);
       lastInteractionRef.current = Date.now();
       updateMouse(event.clientX, event.clientY);
+
+      if (!boundingRef.current) return;
+
+      // Update zone from concentric position
       const pos = getZoneFromPosition(mouseRef.current.x, mouseRef.current.y, boundingRef.current);
       setCurrentZone(pos.zone);
 
+      // Edge detection
       const rect = boundingRef.current;
-      if (rect) {
-        const mx = mouseRef.current.x;
-        const my = mouseRef.current.y;
-        let edge = null;
-        if (my < edgeThreshold) edge = 'top';
-        else if (my > rect.height - edgeThreshold) edge = 'bottom';
-        else if (mx < edgeThreshold) edge = 'left';
-        else if (mx > rect.width - edgeThreshold) edge = 'right';
-        if (edge !== activeEdgeRef.current) {
-          activeEdgeRef.current = edge;
-          setActiveEdge(edge);
-        }
+      const mx = mouseRef.current.x;
+      const my = mouseRef.current.y;
+      let edge = null;
+      if (my < edgeThreshold) edge = 'top';
+      else if (my > rect.height - edgeThreshold) edge = 'bottom';
+      else if (mx < edgeThreshold) edge = 'left';
+      else if (mx > rect.width - edgeThreshold) edge = 'right';
+      if (edge !== activeEdgeRef.current) {
+        activeEdgeRef.current = edge;
+        setActiveEdge(edge);
       }
 
+      // Faint visual splat when not clicking (no audio)
+      if (!pointerDownRef.current) {
+        const sim = fluidSimRef.current;
+        if (sim && rect) {
+          const color = themeRef.current.zoneColors[pos.zone].map(c => c / 255 * 0.3);
+          const radius = themeRef.current.fluid.splatRadius * 0.5;
+          sim.addSplat(
+            mouseRef.current.x / rect.width,
+            1.0 - mouseRef.current.y / rect.height,
+            (mouseRef.current.x - mouseRef.current.lx) * 0.0005,
+            -(mouseRef.current.y - mouseRef.current.ly) * 0.0005,
+            color, radius
+          );
+        }
+        return;
+      }
+
+      // Left button held — trigger notes
       if (audioReadyRef.current) {
         triggerNote(mouseRef.current.x, mouseRef.current.y);
-        if (pointerDownRef.current || droneLatched) refreshDrone();
+        if (droneLatched) refreshDrone();
       }
     },
     [droneLatched, refreshDrone, triggerNote, updateMouse]
