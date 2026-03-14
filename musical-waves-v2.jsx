@@ -363,6 +363,7 @@ export default function MusicalWavesV2() {
   const fxRef = useRef({});
   const scaleNotesRef = useRef({});
   const flowRef = useRef({ intervalId: null, step: 0, direction: 1 });
+  const flowPinnedRef = useRef(null); // null = following mouse, { x, y } = pinned position
   const droneNoteRef = useRef(null);
   const droneSigRef = useRef("");
   const droneChangeRef = useRef(0);
@@ -434,6 +435,7 @@ export default function MusicalWavesV2() {
     flowRef.current.intervalId = null;
     flowRef.current.step = 0;
     flowRef.current.direction = 1;
+    flowPinnedRef.current = null;
     setFlowActive(false);
   }, []);
 
@@ -749,12 +751,19 @@ export default function MusicalWavesV2() {
 
     const activeMood = themeRef.current;
     const rect = boundingRef.current;
-    const xRatio = mouseRef.current.set
-      ? clamp(mouseRef.current.x / Math.max(1, rect.width), 0, 1)
-      : 0.5 + Math.sin(Date.now() * 0.00025) * 0.18;
-    const yRatio = mouseRef.current.set
-      ? clamp(mouseRef.current.y / Math.max(1, rect.height), 0, 1)
-      : 0.48 + Math.sin(Date.now() * 0.00018) * 0.08;
+
+    // Use pinned position if set, otherwise follow mouse
+    let xRatio, yRatio;
+    if (flowPinnedRef.current) {
+      xRatio = clamp(flowPinnedRef.current.x / Math.max(1, rect.width), 0, 1);
+      yRatio = clamp(flowPinnedRef.current.y / Math.max(1, rect.height), 0, 1);
+    } else if (mouseRef.current.set) {
+      xRatio = clamp(mouseRef.current.x / Math.max(1, rect.width), 0, 1);
+      yRatio = clamp(mouseRef.current.y / Math.max(1, rect.height), 0, 1);
+    } else {
+      xRatio = 0.5 + Math.sin(Date.now() * 0.00025) * 0.18;
+      yRatio = 0.48 + Math.sin(Date.now() * 0.00018) * 0.08;
+    }
     const zone = getZone(yRatio);
     const notes = scaleNotesRef.current[zone];
 
@@ -956,12 +965,33 @@ export default function MusicalWavesV2() {
 
       if (event.button !== 0) return;
 
+      // Flow mode: pin/unpin the phantom cursor
+      if (flowActive) {
+        const mx = mouseRef.current.x;
+        const my = mouseRef.current.y;
+        if (flowPinnedRef.current) {
+          // Already pinned — check if clicking near the pinned spot
+          const dist = Math.hypot(mx - flowPinnedRef.current.x, my - flowPinnedRef.current.y);
+          if (dist < 40) {
+            // Click on phantom → unpin, follow mouse again
+            flowPinnedRef.current = null;
+          } else {
+            // Click elsewhere → move pin to new spot
+            flowPinnedRef.current = { x: mx, y: my };
+          }
+        } else {
+          // Following mouse → pin at current position
+          flowPinnedRef.current = { x: mx, y: my };
+        }
+        return;
+      }
+
       // Left-click: start playing
       pointerDownRef.current = true;
       triggerNote(mouseRef.current.x, mouseRef.current.y);
       event.currentTarget.setPointerCapture?.(event.pointerId);
     },
-    [audioStarted, droneLatched, startAudio, startDrone, stopDrone, triggerNote, updateMouse]
+    [audioStarted, droneLatched, flowActive, startAudio, startDrone, stopDrone, triggerNote, updateMouse]
   );
 
   const onPointerMove = useCallback(
