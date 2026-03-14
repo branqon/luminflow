@@ -312,7 +312,7 @@ export default function MusicalWavesV2() {
   const canvasRef = useRef(null);
   const cursorRef = useRef(null);
   const phantomCursorRef = useRef(null);
-  const dronePositionRef = useRef(null);
+  const [dronePosition, setDronePosition] = useState(null);
   const boundingRef = useRef(null);
   const fluidSimRef = useRef(null);
   const lastFrameTimeRef = useRef(performance.now());
@@ -528,6 +528,7 @@ export default function MusicalWavesV2() {
       synthsRef.current = { crystal, pluck, sub };
       droneSynthRef.current = drone;
       fxRef.current = { limiter, compressor, filter, reverb, delay, chorus };
+      await reverb.ready;
       audioReadyRef.current = true;
       setGraphVersion((value) => value + 1);
     },
@@ -629,7 +630,7 @@ export default function MusicalWavesV2() {
         droneChangeRef.current = Tone.now();
         setCurrentZone(zone);
         setDroneActive(true);
-        dronePositionRef.current = { x: mouseRef.current.sx, y: mouseRef.current.sy };
+        setDronePosition({ x: mouseRef.current.sx, y: mouseRef.current.sy });
       } catch (error) {
         // Ignore transient audio errors.
       }
@@ -1210,10 +1211,10 @@ export default function MusicalWavesV2() {
           }} />
         )}
 
-        {droneActive && dronePositionRef.current && (
+        {droneActive && dronePosition && (
           <div className="mw-drone-ring" style={{
-            left: dronePositionRef.current.x,
-            top: dronePositionRef.current.y,
+            left: dronePosition.x,
+            top: dronePosition.y,
             borderColor: colorWithAlpha(mood.zoneColors[currentZone], 0.3),
           }} />
         )}
@@ -1259,39 +1260,52 @@ export default function MusicalWavesV2() {
         <div className="mw-transition-name">{mood.label}</div>
       )}
 
+      {!webglAvailable && (
+        <div className="mw-fallback">
+          <p>Your browser doesn't support WebGL 2.0, which is needed for the visual effects.</p>
+          <p>The audio instrument still works — click or tap anywhere to play.</p>
+        </div>
+      )}
+
       {/* Bottom edge — Mood selector */}
-      <div className={`mw-edge mw-edge-bottom ${activeEdge === 'bottom' || activeEdge === 'all' ? 'visible' : ''}`}>
+      <nav className={`mw-edge mw-edge-bottom ${activeEdge === 'bottom' || activeEdge === 'all' ? 'visible' : ''}`} aria-label="Mood presets">
         <div className="mw-edge-content">
           {Object.entries(MOODS).map(([key, preset]) => (
             <button key={key} className={`mw-edge-btn ${currentMood === key ? 'active' : ''}`}
-              onClick={() => applyMood(key)}>
+              onClick={() => applyMood(key)}
+              aria-label={`Mood: ${preset.label}`}
+              aria-pressed={currentMood === key}>
               {preset.label}
             </button>
           ))}
         </div>
-      </div>
+      </nav>
 
       {/* Right edge — Pitch controls */}
-      <div className={`mw-edge mw-edge-right ${activeEdge === 'right' || activeEdge === 'all' ? 'visible' : ''}`}>
+      <nav className={`mw-edge mw-edge-right ${activeEdge === 'right' || activeEdge === 'all' ? 'visible' : ''}`} aria-label="Pitch controls">
         <div className="mw-edge-content">
-          <select value={currentRoot} onChange={changeRoot} className="mw-edge-select">
+          <select value={currentRoot} onChange={changeRoot} className="mw-edge-select" aria-label="Root key">
             {ROOT_OPTIONS.map((root) => (<option key={root} value={root}>{root}</option>))}
           </select>
           {visibleScaleKeys.map((key) => (
             <button key={key} className={`mw-edge-btn ${currentScale === key ? 'active' : ''}`}
-              onClick={() => changeScale(key)}>
+              onClick={() => changeScale(key)}
+              aria-label={`Scale: ${SCALES[key].label}`}
+              aria-pressed={currentScale === key}>
               {SCALES[key].label}
             </button>
           ))}
           <button className={`mw-edge-btn ${showExperimentalScales ? 'active' : ''}`}
-            onClick={() => setShowExperimentalScales(v => !v)}>
+            onClick={() => setShowExperimentalScales(v => !v)}
+            aria-label={showExperimentalScales ? 'Show safe scales only' : 'Show experimental scales'}
+            aria-pressed={showExperimentalScales}>
             {showExperimentalScales ? 'Safe Only' : 'More Colors'}
           </button>
         </div>
-      </div>
+      </nav>
 
       {/* Left edge — Zone selector */}
-      <div className={`mw-edge mw-edge-left ${activeEdge === 'left' || activeEdge === 'all' ? 'visible' : ''}`}>
+      <nav className={`mw-edge mw-edge-left ${activeEdge === 'left' || activeEdge === 'all' ? 'visible' : ''}`} aria-label="Zone selector">
         <div className="mw-edge-content">
           {Object.keys(ZONES).map((zone) => (
             <span key={zone} className={`mw-edge-glyph ${currentZone === zone ? 'active' : ''}`}
@@ -1300,13 +1314,13 @@ export default function MusicalWavesV2() {
             </span>
           ))}
         </div>
-      </div>
+      </nav>
 
       {/* Top edge — Scene toggles */}
-      <div className={`mw-edge mw-edge-top ${activeEdge === 'top' || activeEdge === 'all' ? 'visible' : ''}`}>
+      <nav className={`mw-edge mw-edge-top ${activeEdge === 'top' || activeEdge === 'all' ? 'visible' : ''}`} aria-label="Scene controls">
         <div className="mw-edge-content">
-          <button className={`mw-edge-btn ${flowEnabled ? 'active' : ''}`} onClick={toggleFlow}>Flow</button>
-          <button className={`mw-edge-btn ${droneLatched ? 'active warm' : ''}`} onClick={toggleDrone}>Drone</button>
+          <button className={`mw-edge-btn ${flowEnabled ? 'active' : ''}`} onClick={toggleFlow} aria-label={`Flow mode: ${flowEnabled ? 'on' : 'off'}`} aria-pressed={flowEnabled}>Flow</button>
+          <button className={`mw-edge-btn ${droneLatched ? 'active warm' : ''}`} onClick={toggleDrone} aria-label={`Drone: ${droneLatched ? 'on' : 'off'}`} aria-pressed={droneLatched}>Drone</button>
           <label className="mw-volume">
             <input
               type="range"
@@ -1316,13 +1330,14 @@ export default function MusicalWavesV2() {
               value={volume}
               onChange={(e) => setVolume(Number(e.target.value))}
               className="mw-volume-slider"
+              aria-label="Volume"
             />
           </label>
-          <button className="mw-edge-btn" onClick={copyLink}>
+          <button className="mw-edge-btn" onClick={copyLink} aria-label="Copy share link">
             {copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Failed' : 'Share'}
           </button>
         </div>
-      </div>
+      </nav>
 
       <div className={`mw-watermark ${activeEdge === 'bottom' || activeEdge === 'left' ? 'bright' : ''}`}
            style={{ color: mood.muted }}>
@@ -1629,6 +1644,28 @@ export default function MusicalWavesV2() {
           pointer-events: none;
           animation: fade-in 0.3s ease forwards;
         }
+        .mw-fallback {
+          position: absolute;
+          bottom: 100px;
+          left: 50%;
+          transform: translateX(-50%);
+          max-width: 400px;
+          padding: 16px 24px;
+          border-radius: 16px;
+          background: rgba(0,0,0,0.6);
+          backdrop-filter: blur(12px);
+          text-align: center;
+          z-index: 5;
+          pointer-events: none;
+        }
+        .mw-fallback p {
+          font-family: 'Inter', system-ui, sans-serif;
+          font-size: 13px;
+          color: var(--muted);
+          margin: 0 0 8px;
+          line-height: 1.5;
+        }
+        .mw-fallback p:last-child { margin: 0; }
         @keyframes drain {
           from { opacity: 0; }
           to { opacity: 1; }

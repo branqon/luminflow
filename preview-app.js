@@ -296,7 +296,7 @@ function MusicalWavesV2() {
   const canvasRef = useRef(null);
   const cursorRef = useRef(null);
   const phantomCursorRef = useRef(null);
-  const dronePositionRef = useRef(null);
+  const [dronePosition, setDronePosition] = useState(null);
   const boundingRef = useRef(null);
   const fluidSimRef = useRef(null);
   const lastFrameTimeRef = useRef(performance.now());
@@ -479,6 +479,7 @@ function MusicalWavesV2() {
       synthsRef.current = { crystal, pluck, sub };
       droneSynthRef.current = drone;
       fxRef.current = { limiter, compressor, filter, reverb, delay, chorus };
+      await reverb.ready;
       audioReadyRef.current = true;
       setGraphVersion((value) => value + 1);
     },
@@ -567,7 +568,7 @@ function MusicalWavesV2() {
         droneChangeRef.current = Tone.now();
         setCurrentZone(zone);
         setDroneActive(true);
-        dronePositionRef.current = { x: mouseRef.current.sx, y: mouseRef.current.sy };
+        setDronePosition({ x: mouseRef.current.sx, y: mouseRef.current.sy });
       } catch (error) {
       }
     },
@@ -1047,9 +1048,9 @@ function MusicalWavesV2() {
                 opacity: 0.6,
                 boxShadow: `0 0 20px 5px ${colorWithAlpha(mood.zoneColors[currentZone], 0.25)}`
               } }),
-              droneActive && dronePositionRef.current && /* @__PURE__ */ jsx("div", { className: "mw-drone-ring", style: {
-                left: dronePositionRef.current.x,
-                top: dronePositionRef.current.y,
+              droneActive && dronePosition && /* @__PURE__ */ jsx("div", { className: "mw-drone-ring", style: {
+                left: dronePosition.x,
+                top: dronePosition.y,
                 borderColor: colorWithAlpha(mood.zoneColors[currentZone], 0.3)
               } }),
               introPhase !== "playing" && /* @__PURE__ */ jsxs(
@@ -1087,22 +1088,30 @@ function MusicalWavesV2() {
         ),
         moodTransition && /* @__PURE__ */ jsx("div", { className: `mw-transition mw-transition-${moodTransition}` }),
         moodTransition === "flooding" && /* @__PURE__ */ jsx("div", { className: "mw-transition-name", children: mood.label }),
-        /* @__PURE__ */ jsx("div", { className: `mw-edge mw-edge-bottom ${activeEdge === "bottom" || activeEdge === "all" ? "visible" : ""}`, children: /* @__PURE__ */ jsx("div", { className: "mw-edge-content", children: Object.entries(MOODS).map(([key, preset]) => /* @__PURE__ */ jsx(
+        !webglAvailable && /* @__PURE__ */ jsxs("div", { className: "mw-fallback", children: [
+          /* @__PURE__ */ jsx("p", { children: "Your browser doesn't support WebGL 2.0, which is needed for the visual effects." }),
+          /* @__PURE__ */ jsx("p", { children: "The audio instrument still works \u2014 click or tap anywhere to play." })
+        ] }),
+        /* @__PURE__ */ jsx("nav", { className: `mw-edge mw-edge-bottom ${activeEdge === "bottom" || activeEdge === "all" ? "visible" : ""}`, "aria-label": "Mood presets", children: /* @__PURE__ */ jsx("div", { className: "mw-edge-content", children: Object.entries(MOODS).map(([key, preset]) => /* @__PURE__ */ jsx(
           "button",
           {
             className: `mw-edge-btn ${currentMood === key ? "active" : ""}`,
             onClick: () => applyMood(key),
+            "aria-label": `Mood: ${preset.label}`,
+            "aria-pressed": currentMood === key,
             children: preset.label
           },
           key
         )) }) }),
-        /* @__PURE__ */ jsx("div", { className: `mw-edge mw-edge-right ${activeEdge === "right" || activeEdge === "all" ? "visible" : ""}`, children: /* @__PURE__ */ jsxs("div", { className: "mw-edge-content", children: [
-          /* @__PURE__ */ jsx("select", { value: currentRoot, onChange: changeRoot, className: "mw-edge-select", children: ROOT_OPTIONS.map((root) => /* @__PURE__ */ jsx("option", { value: root, children: root }, root)) }),
+        /* @__PURE__ */ jsx("nav", { className: `mw-edge mw-edge-right ${activeEdge === "right" || activeEdge === "all" ? "visible" : ""}`, "aria-label": "Pitch controls", children: /* @__PURE__ */ jsxs("div", { className: "mw-edge-content", children: [
+          /* @__PURE__ */ jsx("select", { value: currentRoot, onChange: changeRoot, className: "mw-edge-select", "aria-label": "Root key", children: ROOT_OPTIONS.map((root) => /* @__PURE__ */ jsx("option", { value: root, children: root }, root)) }),
           visibleScaleKeys.map((key) => /* @__PURE__ */ jsx(
             "button",
             {
               className: `mw-edge-btn ${currentScale === key ? "active" : ""}`,
               onClick: () => changeScale(key),
+              "aria-label": `Scale: ${SCALES[key].label}`,
+              "aria-pressed": currentScale === key,
               children: SCALES[key].label
             },
             key
@@ -1112,11 +1121,13 @@ function MusicalWavesV2() {
             {
               className: `mw-edge-btn ${showExperimentalScales ? "active" : ""}`,
               onClick: () => setShowExperimentalScales((v) => !v),
+              "aria-label": showExperimentalScales ? "Show safe scales only" : "Show experimental scales",
+              "aria-pressed": showExperimentalScales,
               children: showExperimentalScales ? "Safe Only" : "More Colors"
             }
           )
         ] }) }),
-        /* @__PURE__ */ jsx("div", { className: `mw-edge mw-edge-left ${activeEdge === "left" || activeEdge === "all" ? "visible" : ""}`, children: /* @__PURE__ */ jsx("div", { className: "mw-edge-content", children: Object.keys(ZONES).map((zone) => /* @__PURE__ */ jsx(
+        /* @__PURE__ */ jsx("nav", { className: `mw-edge mw-edge-left ${activeEdge === "left" || activeEdge === "all" ? "visible" : ""}`, "aria-label": "Zone selector", children: /* @__PURE__ */ jsx("div", { className: "mw-edge-content", children: Object.keys(ZONES).map((zone) => /* @__PURE__ */ jsx(
           "span",
           {
             className: `mw-edge-glyph ${currentZone === zone ? "active" : ""}`,
@@ -1125,9 +1136,9 @@ function MusicalWavesV2() {
           },
           zone
         )) }) }),
-        /* @__PURE__ */ jsx("div", { className: `mw-edge mw-edge-top ${activeEdge === "top" || activeEdge === "all" ? "visible" : ""}`, children: /* @__PURE__ */ jsxs("div", { className: "mw-edge-content", children: [
-          /* @__PURE__ */ jsx("button", { className: `mw-edge-btn ${flowEnabled ? "active" : ""}`, onClick: toggleFlow, children: "Flow" }),
-          /* @__PURE__ */ jsx("button", { className: `mw-edge-btn ${droneLatched ? "active warm" : ""}`, onClick: toggleDrone, children: "Drone" }),
+        /* @__PURE__ */ jsx("nav", { className: `mw-edge mw-edge-top ${activeEdge === "top" || activeEdge === "all" ? "visible" : ""}`, "aria-label": "Scene controls", children: /* @__PURE__ */ jsxs("div", { className: "mw-edge-content", children: [
+          /* @__PURE__ */ jsx("button", { className: `mw-edge-btn ${flowEnabled ? "active" : ""}`, onClick: toggleFlow, "aria-label": `Flow mode: ${flowEnabled ? "on" : "off"}`, "aria-pressed": flowEnabled, children: "Flow" }),
+          /* @__PURE__ */ jsx("button", { className: `mw-edge-btn ${droneLatched ? "active warm" : ""}`, onClick: toggleDrone, "aria-label": `Drone: ${droneLatched ? "on" : "off"}`, "aria-pressed": droneLatched, children: "Drone" }),
           /* @__PURE__ */ jsx("label", { className: "mw-volume", children: /* @__PURE__ */ jsx(
             "input",
             {
@@ -1137,10 +1148,11 @@ function MusicalWavesV2() {
               step: 1,
               value: volume,
               onChange: (e) => setVolume(Number(e.target.value)),
-              className: "mw-volume-slider"
+              className: "mw-volume-slider",
+              "aria-label": "Volume"
             }
           ) }),
-          /* @__PURE__ */ jsx("button", { className: "mw-edge-btn", onClick: copyLink, children: copyStatus === "copied" ? "Copied" : copyStatus === "failed" ? "Failed" : "Share" })
+          /* @__PURE__ */ jsx("button", { className: "mw-edge-btn", onClick: copyLink, "aria-label": "Copy share link", children: copyStatus === "copied" ? "Copied" : copyStatus === "failed" ? "Failed" : "Share" })
         ] }) }),
         /* @__PURE__ */ jsxs(
           "div",
@@ -1456,6 +1468,28 @@ function MusicalWavesV2() {
           pointer-events: none;
           animation: fade-in 0.3s ease forwards;
         }
+        .mw-fallback {
+          position: absolute;
+          bottom: 100px;
+          left: 50%;
+          transform: translateX(-50%);
+          max-width: 400px;
+          padding: 16px 24px;
+          border-radius: 16px;
+          background: rgba(0,0,0,0.6);
+          backdrop-filter: blur(12px);
+          text-align: center;
+          z-index: 5;
+          pointer-events: none;
+        }
+        .mw-fallback p {
+          font-family: 'Inter', system-ui, sans-serif;
+          font-size: 13px;
+          color: var(--muted);
+          margin: 0 0 8px;
+          line-height: 1.5;
+        }
+        .mw-fallback p:last-child { margin: 0; }
         @keyframes drain {
           from { opacity: 0; }
           to { opacity: 1; }
