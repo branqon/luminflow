@@ -334,6 +334,7 @@ export default function MusicalWavesV2() {
     initialStateRef.current.showExperimental
   );
   const [moodTransition, setMoodTransition] = useState(null); // null | 'draining' | 'dark' | 'flooding'
+  const [volume, setVolume] = useState(-12); // dB, range -40 to 0
   const [copyStatus, setCopyStatus] = useState("idle");
   const [cursorVisible, setCursorVisible] = useState(false);
   const [graphVersion, setGraphVersion] = useState(0);
@@ -397,6 +398,10 @@ export default function MusicalWavesV2() {
   useEffect(() => {
     fluidSimRef.current?.setMoodParams(mood.fluid);
   }, [mood]);
+
+  useEffect(() => {
+    Tone.getDestination().volume.value = volume;
+  }, [volume]);
 
   const rebuildNotes = useCallback((scaleKey, rootKey) => {
     scaleNotesRef.current = {
@@ -1248,6 +1253,17 @@ export default function MusicalWavesV2() {
         <div className="mw-edge-content">
           <button className={`mw-edge-btn ${flowEnabled ? 'active' : ''}`} onClick={toggleFlow}>Flow</button>
           <button className={`mw-edge-btn ${droneLatched ? 'active warm' : ''}`} onClick={toggleDrone}>Drone</button>
+          <label className="mw-volume">
+            <input
+              type="range"
+              min={-40}
+              max={0}
+              step={1}
+              value={volume}
+              onChange={(e) => setVolume(Number(e.target.value))}
+              className="mw-volume-slider"
+            />
+          </label>
           <button className="mw-edge-btn" onClick={copyLink}>
             {copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Failed' : 'Share'}
           </button>
@@ -1446,6 +1462,44 @@ export default function MusicalWavesV2() {
           color: var(--text);
           font-family: 'Inter', system-ui, sans-serif;
           font-size: 12px;
+        }
+        .mw-volume {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          cursor: pointer;
+        }
+        .mw-volume-slider {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 80px;
+          height: 3px;
+          background: rgba(255,255,255,0.15);
+          border-radius: 2px;
+          outline: none;
+          cursor: pointer;
+        }
+        .mw-volume-slider::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 14px;
+          height: 14px;
+          border-radius: 50%;
+          background: rgba(255,255,255,0.7);
+          border: none;
+          cursor: pointer;
+          transition: background 0.15s ease;
+        }
+        .mw-volume-slider::-webkit-slider-thumb:hover {
+          background: rgba(255,255,255,0.95);
+        }
+        .mw-volume-slider::-moz-range-thumb {
+          width: 14px;
+          height: 14px;
+          border-radius: 50%;
+          background: rgba(255,255,255,0.7);
+          border: none;
+          cursor: pointer;
         }
         .mw-edge-glyph {
           font-family: 'Inter', system-ui, sans-serif;
