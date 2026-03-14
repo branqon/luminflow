@@ -269,10 +269,32 @@ function colorWithAlpha(color, alpha) {
   return `rgba(${color[0]}, ${color[1]}, ${color[2]}, ${alpha})`;
 }
 
-function getZone(yRatio) {
-  if (yRatio < 0.33) return "crystal";
-  if (yRatio < 0.66) return "pluck";
-  return "sub";
+const NOTE_GAP = { crystal: 30, pluck: 80, sub: 200 }; // ms per zone
+
+function getZoneFromPosition(x, y, rect) {
+  const cx = rect.width / 2;
+  const cy = rect.height / 2;
+  const radius = Math.min(cx, cy);
+  const dx = x - cx;
+  const dy = y - cy;
+  const distance = Math.hypot(dx, dy);
+  const ratio = distance / radius;
+  const angle = Math.atan2(dx, -dy); // 0 = top, clockwise positive
+
+  let zone, ringDepth;
+  if (ratio < 0.30) {
+    zone = 'crystal';
+    ringDepth = ratio / 0.30;
+  } else if (ratio < 0.65) {
+    zone = 'pluck';
+    ringDepth = (ratio - 0.30) / 0.35;
+  } else {
+    zone = 'sub';
+    ringDepth = Math.min((ratio - 0.65) / 0.35, 1.0);
+  }
+
+  const normalizedAngle = ((angle + 2 * Math.PI) % (2 * Math.PI)) / (2 * Math.PI);
+  return { zone, angle: normalizedAngle, ringDepth };
 }
 
 function buildScaleNotes(scaleKey, rootKey, octLow, octHigh) {
@@ -642,8 +664,10 @@ export default function MusicalWavesV2() {
     (source = "latched") => {
       if (!audioReadyRef.current || !boundingRef.current || !droneSynthRef.current) return;
 
-      const yRatio = clamp(mouseRef.current.y / Math.max(1, boundingRef.current.height), 0, 1);
-      const zone = mouseRef.current.set ? getZone(yRatio) : "pluck";
+      const pos = boundingRef.current
+        ? getZoneFromPosition(mouseRef.current.x, mouseRef.current.y, boundingRef.current)
+        : { zone: 'pluck', angle: 0, ringDepth: 0.5 };
+      const zone = pos.zone;
       const { chord, sig } = getDroneChord(zone);
 
       if (!chord.length || sig === droneSigRef.current) return;
@@ -675,8 +699,7 @@ export default function MusicalWavesV2() {
 
       const rect = boundingRef.current;
       const mouse = mouseRef.current;
-      const yRatio = clamp(mouse.y / Math.max(1, rect.height), 0, 1);
-      const zone = getZone(yRatio);
+      const zone = getZoneFromPosition(mouseRef.current.x, mouseRef.current.y, boundingRef.current).zone;
       const notes = scaleNotesRef.current[zone];
 
       if (!notes || !notes.length) return;
@@ -720,7 +743,7 @@ export default function MusicalWavesV2() {
     const yRatio = mouseRef.current.set
       ? clamp(mouseRef.current.y / Math.max(1, rect.height), 0, 1)
       : 0.48 + Math.sin(Date.now() * 0.00018) * 0.08;
-    const zone = getZone(yRatio);
+    const zone = getZoneFromPosition(mouseRef.current.x, mouseRef.current.y, boundingRef.current).zone;
     const notes = scaleNotesRef.current[zone];
 
     if (!notes || !notes.length) return;
@@ -921,9 +944,8 @@ export default function MusicalWavesV2() {
       else setCursorVisible(false);
       lastInteractionRef.current = Date.now();
       updateMouse(event.clientX, event.clientY);
-      setCurrentZone(
-        getZone(clamp(mouseRef.current.y / Math.max(1, boundingRef.current?.height || 1), 0, 1))
-      );
+      const pos = getZoneFromPosition(mouseRef.current.x, mouseRef.current.y, boundingRef.current);
+      setCurrentZone(pos.zone);
 
       const rect = boundingRef.current;
       if (rect) {
