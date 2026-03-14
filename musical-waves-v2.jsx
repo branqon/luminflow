@@ -778,27 +778,47 @@ export default function MusicalWavesV2() {
   const runFlowStep = useCallback(() => {
     if (!audioReadyRef.current || !boundingRef.current) return;
 
-    const activeMood = themeRef.current;
     const rect = boundingRef.current;
-    const xRatio = mouseRef.current.set
-      ? clamp(mouseRef.current.x / Math.max(1, rect.width), 0, 1)
-      : 0.5 + Math.sin(Date.now() * 0.00025) * 0.18;
-    const yRatio = mouseRef.current.set
-      ? clamp(mouseRef.current.y / Math.max(1, rect.height), 0, 1)
-      : 0.48 + Math.sin(Date.now() * 0.00018) * 0.08;
-    const zone = getZoneFromPosition(mouseRef.current.x, mouseRef.current.y, boundingRef.current).zone;
-    const notes = scaleNotesRef.current[zone];
+    const cx = rect.width / 2;
+    const cy = rect.height / 2;
+    const r = Math.min(cx, cy);
+    const t = flowRef.current.t;
 
+    // Spiral position
+    const spiralAngle = t * 0.06;
+    let spiralRadius = 0.05 + (t * 0.003) * flowRef.current.direction;
+
+    // Reverse at bounds
+    if (spiralRadius > 0.95) flowRef.current.direction = -1;
+    if (spiralRadius < 0.05) flowRef.current.direction = 1;
+    spiralRadius = clamp(spiralRadius, 0.05, 0.95);
+
+    // Noise for organic variation
+    const noise = noiseRef.current;
+    const noiseX = noise ? noise(t * 0.01, 0) * 0.08 : 0;
+    const noiseY = noise ? noise(0, t * 0.01) * 0.08 : 0;
+
+    const x = cx + Math.cos(spiralAngle) * spiralRadius * r + noiseX * r;
+    const y = cy + Math.sin(spiralAngle) * spiralRadius * r + noiseY * r;
+
+    flowRef.current.t += 1;
+
+    // Detect zone and trigger note
+    const pos = getZoneFromPosition(x, y, rect);
+    const { zone } = pos;
+    const notes = scaleNotesRef.current[zone];
     if (!notes || !notes.length) return;
 
-    const pattern = activeMood.flowPattern;
-    const step = flowRef.current.step % pattern.length;
-    const offset = pattern[step] * flowRef.current.direction;
-    const anchor = clamp(Math.floor(xRatio * (notes.length - 1)), 0, notes.length - 1);
-    const noteIndex = clamp(anchor + offset, 0, notes.length - 1);
-    const synth = synthsRef.current[zone];
+    const scaleSize = SCALES[currentScale].intervals.length;
+    const degree = Math.floor(pos.angle * scaleSize) % scaleSize;
+    const octaveRange = ZONES[zone].octaves[1] - ZONES[zone].octaves[0];
+    const octave = Math.floor(pos.ringDepth * (octaveRange + 0.99));
+    const noteIndex = clamp(octave * scaleSize + degree, 0, notes.length - 1);
 
+    const synth = synthsRef.current[zone];
     if (!synth) return;
+
+    const activeMood = themeRef.current;
 
     try {
       synth.triggerAttackRelease(
@@ -812,23 +832,13 @@ export default function MusicalWavesV2() {
     }
 
     setCurrentZone(zone);
-    injectSplat(
-      xRatio * rect.width,
-      yRatio * rect.height,
-      (Math.random() - 0.5) * 20,
-      (Math.random() - 0.5) * 20,
-      zone
-    );
+    injectSplat(x, y, Math.cos(spiralAngle) * 2, Math.sin(spiralAngle) * 2, zone);
 
-    if (phantomCursorRef.current && boundingRef.current) {
-      const px = rect.width * xRatio;
-      const py = rect.height * yRatio;
-      phantomCursorRef.current.style.transform = `translate3d(${px - 8}px, ${py - 8}px, 0)`;
+    // Update phantom cursor position
+    if (phantomCursorRef.current) {
+      phantomCursorRef.current.style.transform = `translate3d(${x - 8}px, ${y - 8}px, 0)`;
     }
-
-    if (step === pattern.length - 1) flowRef.current.direction *= -1;
-    flowRef.current.step += 1;
-  }, [injectSplat]);
+  }, [currentScale, injectSplat]);
 
 
   const drawFrame = useCallback(() => {
