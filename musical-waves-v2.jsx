@@ -390,7 +390,7 @@ export default function MusicalWavesV2() {
   const droneSynthRef = useRef(null);
   const fxRef = useRef({});
   const scaleNotesRef = useRef({});
-  const flowRef = useRef({ intervalId: null, step: 0, direction: 1 });
+  const flowRef = useRef({ intervalId: null, t: 0, direction: 1 });
   const droneNoteRef = useRef(null);
   const droneSigRef = useRef("");
   const droneChangeRef = useRef(0);
@@ -460,7 +460,7 @@ export default function MusicalWavesV2() {
   const stopFlow = useCallback(() => {
     if (flowRef.current.intervalId) clearInterval(flowRef.current.intervalId);
     flowRef.current.intervalId = null;
-    flowRef.current.step = 0;
+    flowRef.current.t = 0;
     flowRef.current.direction = 1;
     setFlowActive(false);
   }, []);
@@ -1219,6 +1219,58 @@ export default function MusicalWavesV2() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    let twoFingerTimeout = null;
+    let twoFingerCancelled = false;
+
+    const handleTouchStart = (e) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        twoFingerCancelled = false;
+        twoFingerTimeout = setTimeout(() => {
+          if (!twoFingerCancelled) {
+            if (droneLatched) {
+              stopDrone();
+              setDroneLatched(false);
+            } else {
+              setDroneLatched(true);
+              startDrone("latched");
+            }
+          }
+        }, 300);
+      }
+    };
+
+    const handleTouchMove = (e) => {
+      if (e.touches.length === 2 && twoFingerTimeout) {
+        twoFingerCancelled = true;
+        clearTimeout(twoFingerTimeout);
+        twoFingerTimeout = null;
+      }
+    };
+
+    const handleTouchEnd = () => {
+      if (twoFingerTimeout) {
+        clearTimeout(twoFingerTimeout);
+        twoFingerTimeout = null;
+      }
+    };
+
+    stage.addEventListener('touchstart', handleTouchStart, { passive: false });
+    stage.addEventListener('touchmove', handleTouchMove);
+    stage.addEventListener('touchend', handleTouchEnd);
+
+    return () => {
+      stage.removeEventListener('touchstart', handleTouchStart);
+      stage.removeEventListener('touchmove', handleTouchMove);
+      stage.removeEventListener('touchend', handleTouchEnd);
+      if (twoFingerTimeout) clearTimeout(twoFingerTimeout);
+    };
+  }, [droneLatched, startDrone, stopDrone]);
 
   return (
     <div
