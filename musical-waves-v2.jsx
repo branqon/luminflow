@@ -340,6 +340,7 @@ export default function MusicalWavesV2() {
   const [pointerDown, setPointerDown] = useState(false);
   const [graphVersion, setGraphVersion] = useState(0);
   const [webglAvailable, setWebglAvailable] = useState(true);
+  const webglTriedRef = useRef(false); // tracks whether init was already attempted
 
   const activeEdgeRef = useRef(null);
   const [activeEdge, setActiveEdge] = useState(null); // 'top' | 'bottom' | 'left' | 'right' | 'all' | null
@@ -581,7 +582,8 @@ export default function MusicalWavesV2() {
     const rect = stageRef.current.getBoundingClientRect();
     boundingRef.current = rect;
     if (canvasRef.current) {
-      if (!fluidSimRef.current && webglAvailable) {
+      if (!fluidSimRef.current && !webglTriedRef.current) {
+        webglTriedRef.current = true;
         fluidSimRef.current = new window.FluidSim();
         const success = fluidSimRef.current.init(canvasRef.current);
         if (!success) {
@@ -1070,17 +1072,8 @@ export default function MusicalWavesV2() {
     rebuildNotes(currentScale, currentRoot);
   }, [currentScale, currentRoot, rebuildNotes]);
 
-  useEffect(() => {
-    if (!audioStarted || moodTransition) return;
-    let cancelled = false;
-    (async () => {
-      await buildAudioGraph(currentMood);
-      if (!cancelled && droneLatched) startDrone("latched");
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [audioStarted, buildAudioGraph, currentMood, moodTransition]);
+  // Audio graph is built by startAudio() on first play and by applyMood() on mood changes.
+  // No effect needed here — the previous version caused redundant rebuilds.
 
   useEffect(() => {
     if (!audioStarted || !audioReadyRef.current) return;

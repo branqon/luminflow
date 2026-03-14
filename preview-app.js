@@ -323,6 +323,7 @@ function MusicalWavesV2() {
   const [pointerDown, setPointerDown] = useState(false);
   const [graphVersion, setGraphVersion] = useState(0);
   const [webglAvailable, setWebglAvailable] = useState(true);
+  const webglTriedRef = useRef(false);
   const activeEdgeRef = useRef(null);
   const [activeEdge, setActiveEdge] = useState(null);
   const edgeThreshold = 80;
@@ -531,7 +532,8 @@ function MusicalWavesV2() {
     const rect = stageRef.current.getBoundingClientRect();
     boundingRef.current = rect;
     if (canvasRef.current) {
-      if (!fluidSimRef.current && webglAvailable) {
+      if (!fluidSimRef.current && !webglTriedRef.current) {
+        webglTriedRef.current = true;
         fluidSimRef.current = new window.FluidSim();
         const success = fluidSimRef.current.init(canvasRef.current);
         if (!success) {
@@ -928,17 +930,6 @@ function MusicalWavesV2() {
   useEffect(() => {
     rebuildNotes(currentScale, currentRoot);
   }, [currentScale, currentRoot, rebuildNotes]);
-  useEffect(() => {
-    if (!audioStarted || moodTransition) return;
-    let cancelled = false;
-    (async () => {
-      await buildAudioGraph(currentMood);
-      if (!cancelled && droneLatched) startDrone("latched");
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [audioStarted, buildAudioGraph, currentMood, moodTransition]);
   useEffect(() => {
     if (!audioStarted || !audioReadyRef.current) return;
     if (droneLatched) startDrone("latched");
