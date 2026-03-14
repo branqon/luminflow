@@ -525,7 +525,7 @@ export default function MusicalWavesV2() {
         options: {
           oscillator: { type: "triangle" },
           envelope: {
-            attack: 0.006,
+            attack: 0.04,
             decay: 0.24,
             sustain: 0.03,
             release: settings.pluckRelease,
@@ -535,12 +535,12 @@ export default function MusicalWavesV2() {
       }).connect(delay);
 
       const sub = new Tone.PolySynth(Tone.Synth, {
-        maxPolyphony: 3,
+        maxPolyphony: 6,
         voice: Tone.Synth,
         options: {
           oscillator: { type: "sine" },
           envelope: {
-            attack: settings.subAttack,
+            attack: 0.15,
             decay: 0.55,
             sustain: 0.26,
             release: settings.subRelease,
@@ -608,15 +608,30 @@ export default function MusicalWavesV2() {
     }
   }, []);
 
+  const SPLAT_SCALE = {
+    crystal: { radius: 0.5, intensity: 1.4, velocityMul: 1.5 },
+    pluck:   { radius: 1.0, intensity: 1.0, velocityMul: 1.0 },
+    sub:     { radius: 2.0, intensity: 0.6, velocityMul: 0.5 },
+  };
+
   const injectSplat = useCallback((x, y, dx, dy, zone) => {
     const sim = fluidSimRef.current;
     if (!sim || !boundingRef.current) return;
     const rect = boundingRef.current;
     const fluid = themeRef.current.fluid;
     const color = themeRef.current.zoneColors[zone].map(c => c / 255);
-    const scale = fluid.noteSplatScale?.[zone] || 1.0;
-    const radius = fluid.splatRadius * scale;
-    sim.addSplat(x / rect.width, 1.0 - y / rect.height, dx * 0.001, -dy * 0.001, color, radius);
+    const scale = SPLAT_SCALE[zone] || SPLAT_SCALE.pluck;
+    const noteScale = fluid.noteSplatScale?.[zone] || 1.0;
+    const radius = fluid.splatRadius * scale.radius * noteScale;
+    const adjustedColor = color.map(c => Math.min(c * scale.intensity, 1.0));
+    sim.addSplat(
+      x / rect.width,
+      1.0 - y / rect.height,
+      dx * 0.001 * scale.velocityMul,
+      -dy * 0.001 * scale.velocityMul,
+      adjustedColor,
+      radius
+    );
   }, []);
 
   const getDroneChord = useCallback((zone) => {
@@ -670,43 +685,63 @@ export default function MusicalWavesV2() {
   }, [droneActive, droneLatched, startDrone]);
 
   const triggerNote = useCallback(
-    (clientX) => {
+    (x, y) => {
       if (!audioReadyRef.current || !boundingRef.current) return;
 
       const rect = boundingRef.current;
       const mouse = mouseRef.current;
-      const yRatio = clamp(mouse.y / Math.max(1, rect.height), 0, 1);
+      const yRatio = clamp(y / Math.max(1, rect.height), 0, 1);
       const zone = getZone(yRatio);
       const notes = scaleNotesRef.current[zone];
 
       if (!notes || !notes.length) return;
 
-      if (Tone.now() - lastNoteTimeRef.current < 0.05) return;
+      // Per-zone throttle
+      const NOTE_GAP = { crystal: 0.03, pluck: 0.08, sub: 0.2 };
+      if (Tone.now() - lastNoteTimeRef.current < (NOTE_GAP[zone] || 0.05)) return;
 
       lastNoteTimeRef.current = Tone.now();
       setCurrentZone(zone);
 
-      const xRatio = clamp((clientX - rect.left) / Math.max(1, rect.width), 0, 1);
+      const xRatio = clamp(x / Math.max(1, rect.width), 0, 1);
       const noteIndex = clamp(Math.floor(xRatio * (notes.length - 1)), 0, notes.length - 1);
       const note = notes[noteIndex];
       const synth = synthsRef.current[zone];
 
       if (!synth) return;
 
-      const speed = clamp(mouse.vs, 0, 90);
-      const bloom = 1 - speed / 90;
-      const duration = 0.08 + bloom * 0.32;
-      const velocity = 0.12 + (1 - yRatio) * 0.18 + bloom * 0.18;
+      const dragSpeed = clamp(mouse.vs, 0, 90);
+
+      // Per-zone velocity and duration
+      let velocity, duration;
+      if (zone === 'crystal') {
+        velocity = 0.15 + (1 - yRatio) * 0.25 + clamp(dragSpeed * 0.002, 0, 0.08);
+        duration = 0.12;
+      } else if (zone === 'pluck') {
+        velocity = 0.12 + (1 - yRatio) * 0.23;
+        duration = 0.1 + (1 - clamp(dragSpeed / 80, 0, 1)) * 0.4;
+      } else {
+        velocity = 0.10 + (1 - yRatio) * 0.18;
+        duration = 0.3;
+      }
 
       try {
         synth.triggerAttackRelease(note, duration, Tone.now(), velocity);
+        // Sub-octave layer for Sub zone
+        if (zone === 'sub' && noteIndex > 0) {
+          const scaleSize = SCALES[currentScale].intervals.length;
+          const subIndex = clamp(noteIndex - scaleSize, 0, notes.length - 1);
+          if (subIndex !== noteIndex) {
+            synth.triggerAttackRelease(notes[subIndex], duration, Tone.now(), velocity * 0.6);
+          }
+        }
       } catch (error) {
         // Ignore transient audio errors.
       }
 
       injectSplat(mouse.x, mouse.y, mouse.x - mouse.lx, mouse.y - mouse.ly, zone);
     },
-    [injectSplat]
+    [currentScale, injectSplat]
   );
 
   const runFlowStep = useCallback(() => {
@@ -896,23 +931,37 @@ export default function MusicalWavesV2() {
 
   const finishPointer = useCallback(() => {
     pointerDownRef.current = false;
-    if (!droneLatched) stopDrone();
-  }, [droneLatched, stopDrone]);
+  }, []);
 
   const onPointerDown = useCallback(
     async (event) => {
-      if (event.button !== undefined && event.button !== 0) return;
       event.preventDefault();
-      pointerDownRef.current = true;
       lastInteractionRef.current = Date.now();
       updateMouse(event.clientX, event.clientY);
       if (event.pointerType === "mouse") setCursorVisible(true);
+
       if (!audioStarted) await startAudio();
-      triggerNote(event.clientX);
-      startDrone("touch");
+
+      if (event.button === 2) {
+        // Right-click: toggle drone
+        if (droneLatched) {
+          stopDrone();
+          setDroneLatched(false);
+        } else {
+          setDroneLatched(true);
+          startDrone("latched");
+        }
+        return;
+      }
+
+      if (event.button !== 0) return;
+
+      // Left-click: start playing
+      pointerDownRef.current = true;
+      triggerNote(mouseRef.current.x, mouseRef.current.y);
       event.currentTarget.setPointerCapture?.(event.pointerId);
     },
-    [audioStarted, startAudio, startDrone, triggerNote, updateMouse]
+    [audioStarted, droneLatched, startAudio, startDrone, stopDrone, triggerNote, updateMouse]
   );
 
   const onPointerMove = useCallback(
@@ -921,28 +970,48 @@ export default function MusicalWavesV2() {
       else setCursorVisible(false);
       lastInteractionRef.current = Date.now();
       updateMouse(event.clientX, event.clientY);
+
+      if (!boundingRef.current) return;
+
       setCurrentZone(
-        getZone(clamp(mouseRef.current.y / Math.max(1, boundingRef.current?.height || 1), 0, 1))
+        getZone(clamp(mouseRef.current.y / Math.max(1, boundingRef.current.height), 0, 1))
       );
 
       const rect = boundingRef.current;
-      if (rect) {
-        const mx = mouseRef.current.x;
-        const my = mouseRef.current.y;
-        let edge = null;
-        if (my < edgeThreshold) edge = 'top';
-        else if (my > rect.height - edgeThreshold) edge = 'bottom';
-        else if (mx < edgeThreshold) edge = 'left';
-        else if (mx > rect.width - edgeThreshold) edge = 'right';
-        if (edge !== activeEdgeRef.current) {
-          activeEdgeRef.current = edge;
-          setActiveEdge(edge);
-        }
+      const mx = mouseRef.current.x;
+      const my = mouseRef.current.y;
+      let edge = null;
+      if (my < edgeThreshold) edge = 'top';
+      else if (my > rect.height - edgeThreshold) edge = 'bottom';
+      else if (mx < edgeThreshold) edge = 'left';
+      else if (mx > rect.width - edgeThreshold) edge = 'right';
+      if (edge !== activeEdgeRef.current) {
+        activeEdgeRef.current = edge;
+        setActiveEdge(edge);
       }
 
+      // Faint visual splat when not clicking (no audio)
+      if (!pointerDownRef.current) {
+        const sim = fluidSimRef.current;
+        if (sim) {
+          const zone = getZone(clamp(my / Math.max(1, rect.height), 0, 1));
+          const color = themeRef.current.zoneColors[zone].map(c => c / 255 * 0.3);
+          const radius = themeRef.current.fluid.splatRadius * 0.5;
+          sim.addSplat(
+            mx / rect.width,
+            1.0 - my / rect.height,
+            (mx - mouseRef.current.lx) * 0.0005,
+            -(my - mouseRef.current.ly) * 0.0005,
+            color, radius
+          );
+        }
+        return;
+      }
+
+      // Left button held — trigger notes
       if (audioReadyRef.current) {
-        triggerNote(event.clientX);
-        if (pointerDownRef.current || droneLatched) refreshDrone();
+        triggerNote(mouseRef.current.x, mouseRef.current.y);
+        if (droneLatched) refreshDrone();
       }
     },
     [droneLatched, refreshDrone, triggerNote, updateMouse]
