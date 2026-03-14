@@ -333,6 +333,7 @@ export default function MusicalWavesV2() {
   const [showExperimentalScales, setShowExperimentalScales] = useState(
     initialStateRef.current.showExperimental
   );
+  const [moodTransition, setMoodTransition] = useState(null); // null | 'draining' | 'dark' | 'flooding'
   const [copyStatus, setCopyStatus] = useState("idle");
   const [cursorVisible, setCursorVisible] = useState(false);
   const [graphVersion, setGraphVersion] = useState(0);
@@ -805,13 +806,36 @@ export default function MusicalWavesV2() {
     setIntroPhase('playing');
   }, [audioStarted, buildAudioGraph, currentMood, currentRoot, currentScale, rebuildNotes]);
 
-  const applyMood = useCallback((key) => {
+  const applyMood = useCallback(async (key) => {
+    if (key === currentMood || moodTransition) return;
+    setMoodTransition('draining');
+
+    // Audio keeps playing during the drain phase (800ms)
+    await new Promise(r => setTimeout(r, 800));
+    setMoodTransition('dark');
+
+    // NOW dispose old audio and rebuild during the dark beat
     setCurrentMood(key);
     setCurrentScale(MOODS[key].defaultScale);
     setCurrentRoot(MOODS[key].defaultRoot);
     setShowExperimentalScales(!SCALES[MOODS[key].defaultScale].safe);
+
+    if (audioStarted) {
+      await buildAudioGraph(key);
+    }
+
+    // Set new fluid params
+    fluidSimRef.current?.setMoodParams(MOODS[key].fluid);
+
+    setMoodTransition('flooding');
+    // Center splat with new mood colors
+    const color = MOODS[key].zoneColors.pluck.map(c => c / 255);
+    fluidSimRef.current?.addSplat(0.5, 0.5, 0, 0, color, 0.02);
+
+    await new Promise(r => setTimeout(r, 600));
+    setMoodTransition(null);
     lastInteractionRef.current = Date.now();
-  }, []);
+  }, [currentMood, moodTransition, audioStarted, buildAudioGraph]);
 
   const changeScale = useCallback((key) => {
     setCurrentScale(key);
@@ -924,7 +948,7 @@ export default function MusicalWavesV2() {
   }, [currentScale, currentRoot, rebuildNotes]);
 
   useEffect(() => {
-    if (!audioStarted) return;
+    if (!audioStarted || moodTransition) return;
     let cancelled = false;
     (async () => {
       await buildAudioGraph(currentMood);
@@ -933,7 +957,7 @@ export default function MusicalWavesV2() {
     return () => {
       cancelled = true;
     };
-  }, [audioStarted, buildAudioGraph, currentMood, droneLatched, startDrone]);
+  }, [audioStarted, buildAudioGraph, currentMood, droneLatched, moodTransition, startDrone]);
 
   useEffect(() => {
     if (!audioStarted || !audioReadyRef.current) return;
@@ -1125,6 +1149,13 @@ export default function MusicalWavesV2() {
           </div>
         )}
       </div>
+
+      {moodTransition && (
+        <div className={`mw-transition mw-transition-${moodTransition}`} />
+      )}
+      {moodTransition === 'flooding' && (
+        <div className="mw-transition-name">{mood.label}</div>
+      )}
 
       {/* Bottom edge — Mood selector */}
       <div className={`mw-edge mw-edge-bottom ${activeEdge === 'bottom' || activeEdge === 'all' ? 'visible' : ''}`}>
@@ -1411,6 +1442,44 @@ export default function MusicalWavesV2() {
           letter-spacing: 0.12em;
           text-transform: uppercase;
           margin-top: 8px;
+        }
+        .mw-transition {
+          position: absolute;
+          inset: 0;
+          z-index: 15;
+          pointer-events: none;
+        }
+        .mw-transition-draining {
+          animation: drain 0.8s ease-in forwards;
+          background: radial-gradient(circle at center, transparent 0%, rgba(0,0,0,0.9) 100%);
+        }
+        .mw-transition-dark {
+          background: rgba(0,0,0,0.95);
+        }
+        .mw-transition-flooding {
+          animation: flood 0.6s ease-out forwards;
+          background: radial-gradient(circle at center, transparent 60%, rgba(0,0,0,0.9) 100%);
+        }
+        .mw-transition-name {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-family: 'Playfair Display', Georgia, serif;
+          font-size: clamp(36px, 6vw, 64px);
+          color: var(--text);
+          z-index: 16;
+          pointer-events: none;
+          animation: fade-in 0.3s ease forwards;
+        }
+        @keyframes drain {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes flood {
+          from { opacity: 1; }
+          to { opacity: 0; }
         }
       `}</style>
     </div>
