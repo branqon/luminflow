@@ -1,0 +1,11 @@
+Total messages: 8 (Errors: 2, Warnings: 4)
+
+[LOG] %c * Tone.js v15.1.22 *  background: #000; color: #fff @ https://esm.sh/tone@15.1.22/es2022/tone.mjs:16
+[WARNING] The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. https://developer.chrome.com/blog/autoplay/#web_audio @ https://esm.sh/standardized-audio-context@25.3.77/es2022/standardized-audio-context.mjs:3
+[WARNING] The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. https://developer.chrome.com/blog/autoplay/#web_audio @ https://esm.sh/standardized-audio-context@25.3.77/es2022/standardized-audio-context.mjs:3
+[ERROR] Failed to load resource: the server responded with a status of 404 (File not found) @ http://127.0.0.1:4173/favicon.ico:0
+[LOG] %c * Tone.js v15.1.22 *  background: #000; color: #fff @ https://esm.sh/tone@15.1.22/es2022/tone.mjs:16
+[WARNING] The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. https://developer.chrome.com/blog/autoplay/#web_audio @ https://esm.sh/standardized-audio-context@25.3.77/es2022/standardized-audio-context.mjs:3
+[WARNING] The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. https://developer.chrome.com/blog/autoplay/#web_audio @ https://esm.sh/standardized-audio-context@25.3.77/es2022/standardized-audio-context.mjs:3
+ReferenceError: React is not defined
+    at http://127.0.0.1:4173/preview-app.js:1353:43
