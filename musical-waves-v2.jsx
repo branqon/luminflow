@@ -338,10 +338,11 @@ export default function MusicalWavesV2() {
   const [graphVersion, setGraphVersion] = useState(0);
 
   const stageRef = useRef(null);
-  const mainCanvasRef = useRef(null);
-  const glowCanvasRef = useRef(null);
+  const canvasRef = useRef(null);
   const cursorRef = useRef(null);
   const boundingRef = useRef(null);
+  const fluidSimRef = useRef(null);
+  const lastFrameTimeRef = useRef(performance.now());
 
   const audioReadyRef = useRef(false);
   const synthsRef = useRef({});
@@ -355,13 +356,7 @@ export default function MusicalWavesV2() {
   const pointerDownRef = useRef(false);
   const noiseRef = useRef(null);
   const rafRef = useRef(null);
-  const linesRef = useRef([]);
-  const lineXRef = useRef([]);
-  const lastLineRef = useRef(-1);
   const lastNoteTimeRef = useRef(0);
-  const glowsRef = useRef([]);
-  const particlesRef = useRef([]);
-  const timeRef = useRef(0);
   const themeRef = useRef(MOODS[initialStateRef.current.mood]);
   const idleStepRef = useRef(0);
   const lastInteractionRef = useRef(Date.now());
@@ -385,6 +380,10 @@ export default function MusicalWavesV2() {
 
   useEffect(() => {
     themeRef.current = mood;
+  }, [mood]);
+
+  useEffect(() => {
+    fluidSimRef.current?.setMoodParams(mood.fluid);
   }, [mood]);
 
   const rebuildNotes = useCallback((scaleKey, rootKey) => {
@@ -561,63 +560,14 @@ export default function MusicalWavesV2() {
     if (!stageRef.current) return;
     const rect = stageRef.current.getBoundingClientRect();
     boundingRef.current = rect;
-    [mainCanvasRef, glowCanvasRef].forEach((ref) => {
-      if (!ref.current) return;
-      ref.current.width = rect.width;
-      ref.current.height = rect.height;
-    });
-  }, []);
-
-  const initLines = useCallback(() => {
-    if (!boundingRef.current) return;
-
-    const { width, height } = boundingRef.current;
-    const xGap = 12;
-    const yGap = 8;
-    const totalLines = Math.ceil((width + 220) / xGap);
-    const totalPoints = Math.ceil((height + 40) / yGap);
-    const xStart = (width - xGap * totalLines) / 2;
-    const yStart = (height - yGap * totalPoints) / 2;
-
-    linesRef.current = [];
-    lineXRef.current = [];
-
-    for (let line = 0; line < totalLines; line += 1) {
-      const x = xStart + xGap * line;
-      const points = [];
-      lineXRef.current.push(x);
-
-      for (let point = 0; point < totalPoints; point += 1) {
-        points.push({
-          x,
-          y: yStart + yGap * point,
-          wave: { x: 0, y: 0 },
-          cursor: { x: 0, y: 0, vx: 0, vy: 0 },
-        });
+    if (canvasRef.current) {
+      if (!fluidSimRef.current) {
+        fluidSimRef.current = new window.FluidSim();
+        fluidSimRef.current.init(canvasRef.current);
       }
-
-      linesRef.current.push(points);
+      fluidSimRef.current.resize(rect.width, rect.height);
+      fluidSimRef.current.setMoodParams(themeRef.current.fluid);
     }
-  }, []);
-
-  const spawnParticles = useCallback((x, y, color, count) => {
-    for (let i = 0; i < count; i += 1) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = 0.35 + Math.random() * 1.6;
-      particlesRef.current.push({
-        x,
-        y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed - 0.2,
-        life: 1,
-        color,
-        size: 1 + Math.random() * 2,
-      });
-    }
-  }, []);
-
-  const glowLine = useCallback((lineIndex, zone, intensity = 1) => {
-    glowsRef.current.push({ lineIndex, zone, intensity });
   }, []);
 
   const updateMouse = useCallback((clientX, clientY) => {
@@ -635,6 +585,17 @@ export default function MusicalWavesV2() {
       mouse.ly = mouse.y;
       mouse.set = true;
     }
+  }, []);
+
+  const injectSplat = useCallback((x, y, dx, dy, zone) => {
+    const sim = fluidSimRef.current;
+    if (!sim || !boundingRef.current) return;
+    const rect = boundingRef.current;
+    const fluid = themeRef.current.fluid;
+    const color = themeRef.current.zoneColors[zone].map(c => c / 255);
+    const scale = fluid.noteSplatScale?.[zone] || 1.0;
+    const radius = fluid.splatRadius * scale;
+    sim.addSplat(x / rect.width, 1.0 - y / rect.height, dx * 0.001, -dy * 0.001, color, radius);
   }, []);
 
   const getDroneChord = useCallback((zone) => {
@@ -691,7 +652,6 @@ export default function MusicalWavesV2() {
       if (!audioReadyRef.current || !boundingRef.current) return;
 
       const rect = boundingRef.current;
-      const positions = lineXRef.current;
       const mouse = mouseRef.current;
       const yRatio = clamp(mouse.y / Math.max(1, rect.height), 0, 1);
       const zone = getZone(yRatio);
@@ -699,29 +659,13 @@ export default function MusicalWavesV2() {
 
       if (!notes || !notes.length) return;
 
-      let closest = -1;
-      let distance = Infinity;
-
-      for (let i = 0; i < positions.length; i += 1) {
-        const nextDistance = Math.abs(clamp(clientX - rect.left, 0, rect.width) - positions[i]);
-        if (nextDistance < distance) {
-          distance = nextDistance;
-          closest = i;
-        }
-      }
-
-      if (closest === lastLineRef.current || distance > 16) return;
       if (Tone.now() - lastNoteTimeRef.current < 0.05) return;
 
-      lastLineRef.current = closest;
       lastNoteTimeRef.current = Tone.now();
       setCurrentZone(zone);
 
-      const noteIndex = clamp(
-        Math.floor((closest / Math.max(1, positions.length - 1)) * (notes.length - 1)),
-        0,
-        notes.length - 1
-      );
+      const xRatio = clamp((clientX - rect.left) / Math.max(1, rect.width), 0, 1);
+      const noteIndex = clamp(Math.floor(xRatio * (notes.length - 1)), 0, notes.length - 1);
       const note = notes[noteIndex];
       const synth = synthsRef.current[zone];
 
@@ -738,10 +682,9 @@ export default function MusicalWavesV2() {
         // Ignore transient audio errors.
       }
 
-      glowLine(closest, zone, 1.1 + bloom * 0.5);
-      spawnParticles(positions[closest], mouse.y, themeRef.current.zoneColors[zone], 3 + Math.floor(speed * 0.05));
+      injectSplat(mouse.x, mouse.y, mouse.x - mouse.lx, mouse.y - mouse.ly, zone);
     },
-    [glowLine, spawnParticles]
+    [injectSplat]
   );
 
   const runFlowStep = useCallback(() => {
@@ -765,11 +708,6 @@ export default function MusicalWavesV2() {
     const offset = pattern[step] * flowRef.current.direction;
     const anchor = clamp(Math.floor(xRatio * (notes.length - 1)), 0, notes.length - 1);
     const noteIndex = clamp(anchor + offset, 0, notes.length - 1);
-    const lineIndex = clamp(
-      Math.floor((noteIndex / Math.max(1, notes.length - 1)) * (lineXRef.current.length - 1)),
-      0,
-      lineXRef.current.length - 1
-    );
     const synth = synthsRef.current[zone];
 
     if (!synth) return;
@@ -786,156 +724,44 @@ export default function MusicalWavesV2() {
     }
 
     setCurrentZone(zone);
-    glowLine(lineIndex, zone, 0.85);
-
-    if (lineXRef.current[lineIndex] !== undefined) {
-      spawnParticles(
-        lineXRef.current[lineIndex],
-        rect.height * (0.24 + Math.random() * 0.5),
-        activeMood.zoneColors[zone],
-        2
-      );
-    }
+    injectSplat(
+      xRatio * rect.width,
+      yRatio * rect.height,
+      (Math.random() - 0.5) * 20,
+      (Math.random() - 0.5) * 20,
+      zone
+    );
 
     if (step === pattern.length - 1) flowRef.current.direction *= -1;
     flowRef.current.step += 1;
-  }, [glowLine, spawnParticles]);
+  }, [injectSplat]);
 
-  const movePoints = useCallback((time) => {
-    const noise = noiseRef.current;
-    if (!noise) return;
-
-    const mouse = mouseRef.current;
-    timeRef.current = time;
-
-    linesRef.current.forEach((points) => {
-      points.forEach((point) => {
-        const drift = noise((point.x + time * 0.015) * 0.004, (point.y + time * 0.01) * 0.003) * 11;
-        point.wave.x = Math.cos(drift) * 16;
-        point.wave.y = Math.sin(drift) * 8;
-
-        const dx = point.x - mouse.sx;
-        const dy = point.y - mouse.sy;
-        const distance = Math.hypot(dx, dy);
-        const influence = Math.max(190, mouse.vs * 1.4);
-
-        if (distance < influence) {
-          const strength = 1 - distance / influence;
-          const force = Math.cos(distance * 0.0015) * strength;
-          point.cursor.vx += Math.cos(mouse.a) * force * influence * mouse.vs * 0.00036;
-          point.cursor.vy += Math.sin(mouse.a) * force * influence * mouse.vs * 0.00036;
-        }
-
-        point.cursor.vx += -point.cursor.x * 0.012;
-        point.cursor.vy += -point.cursor.y * 0.012;
-        point.cursor.vx *= 0.935;
-        point.cursor.vy *= 0.935;
-        point.cursor.x = clamp(point.cursor.x + point.cursor.vx, -55, 55);
-        point.cursor.y = clamp(point.cursor.y + point.cursor.vy, -55, 55);
-      });
-    });
-  }, []);
-
-  const movedPoint = useCallback((point, includeCursor = true) => {
-    return {
-      x: point.x + point.wave.x + (includeCursor ? point.cursor.x : 0),
-      y: point.y + point.wave.y + (includeCursor ? point.cursor.y : 0),
-    };
-  }, []);
 
   const drawFrame = useCallback(() => {
-    const mainCtx = mainCanvasRef.current?.getContext("2d");
-    const glowCtx = glowCanvasRef.current?.getContext("2d");
-    if (!mainCtx || !glowCtx || !boundingRef.current) return;
+    const sim = fluidSimRef.current;
+    if (!sim || !boundingRef.current) return;
+    const now = performance.now();
+    const dt = Math.min((now - lastFrameTimeRef.current) / 1000, 0.033);
+    lastFrameTimeRef.current = now;
+    sim.step(dt);
 
-    const theme = themeRef.current;
-    const { width, height } = boundingRef.current;
-    const lines = linesRef.current;
-    const glows = glowsRef.current;
-    const t = timeRef.current * 0.0002;
-
-    mainCtx.clearRect(0, 0, width, height);
-    glowCtx.clearRect(0, 0, width, height);
-
-    for (let i = glows.length - 1; i >= 0; i -= 1) {
-      glows[i].intensity *= 0.92;
-      if (glows[i].intensity < 0.02) glows.splice(i, 1);
+    // Idle behavior per mood
+    const fluid = themeRef.current.fluid;
+    const idleColor = themeRef.current.zoneColors.pluck.map(c => c / 255 * 0.3);
+    if (fluid.idleMode === 'drift') {
+      sim.addSplat(0.1, 0.5, fluid.idleForce, 0, idleColor, 0.01);
+    } else if (fluid.idleMode === 'spiral') {
+      const t = performance.now() * 0.0005;
+      const cx = 0.5 + Math.cos(t) * 0.2;
+      const cy = 0.5 + Math.sin(t) * 0.2;
+      sim.addSplat(cx, cy, Math.cos(t + Math.PI/2) * fluid.idleForce, Math.sin(t + Math.PI/2) * fluid.idleForce, idleColor, 0.008);
+    } else if (fluid.idleMode === 'rain') {
+      if (Math.random() < 0.033) {
+        const rx = Math.random();
+        sim.addSplat(rx, 0.95, 0, -fluid.idleForce * 2, idleColor, 0.006);
+      }
     }
-
-    const glowMap = {};
-    const zoneMap = {};
-
-    glows.forEach((glow) => {
-      for (let offset = -10; offset <= 10; offset += 1) {
-        const index = glow.lineIndex + offset;
-        if (index < 0 || index >= lines.length) continue;
-        const falloff = glow.intensity * (1 - Math.abs(offset) / 11);
-        if (!glowMap[index] || falloff > glowMap[index]) {
-          glowMap[index] = falloff;
-          zoneMap[index] = glow.zone;
-        }
-      }
-    });
-
-    lines.forEach((points, lineIndex) => {
-      if (points.length < 2) return;
-      const glow = glowMap[lineIndex] || 0;
-      const zone = zoneMap[lineIndex];
-      const hue =
-        theme.baseHue +
-        Math.sin(lineIndex * 0.08 + t * 2.5) * theme.hueSwing +
-        (lineIndex / Math.max(1, lines.length - 1)) * theme.hueDrift;
-
-      if (glow > 0.05 && zone) {
-        mainCtx.strokeStyle = colorWithAlpha(theme.zoneColors[zone], 0.18 + glow * 0.42);
-        mainCtx.lineWidth = 0.9 + glow * 1.5;
-      } else {
-        mainCtx.strokeStyle = `hsla(${hue}, ${theme.baseSaturation}%, ${theme.baseLightness}%, ${theme.baseAlpha})`;
-        mainCtx.lineWidth = 0.75;
-      }
-
-      mainCtx.beginPath();
-      const first = movedPoint(points[0], false);
-      mainCtx.moveTo(first.x, first.y);
-      for (let i = 1; i < points.length; i += 1) {
-        const point = movedPoint(points[i]);
-        mainCtx.lineTo(point.x, point.y);
-      }
-      mainCtx.stroke();
-    });
-
-    glows.forEach((glow) => {
-      const x = lineXRef.current[glow.lineIndex];
-      if (x === undefined || !glow.zone) return;
-      const color = theme.zoneColors[glow.zone];
-      const radius = 70 * (0.75 + glow.intensity * 0.35);
-      const gradient = glowCtx.createRadialGradient(x, height / 2, 0, x, height / 2, radius);
-      gradient.addColorStop(0, colorWithAlpha(color, glow.intensity * 0.18));
-      gradient.addColorStop(0.45, colorWithAlpha(color, glow.intensity * 0.08));
-      gradient.addColorStop(1, colorWithAlpha(color, 0));
-      glowCtx.fillStyle = gradient;
-      glowCtx.fillRect(x - radius, 0, radius * 2, height);
-    });
-
-    mainCtx.globalCompositeOperation = "lighter";
-    for (let i = particlesRef.current.length - 1; i >= 0; i -= 1) {
-      const particle = particlesRef.current[i];
-      particle.x += particle.vx;
-      particle.y += particle.vy;
-      particle.vy += 0.014;
-      particle.vx *= 0.99;
-      particle.life -= 0.02;
-      if (particle.life <= 0) {
-        particlesRef.current.splice(i, 1);
-        continue;
-      }
-      mainCtx.fillStyle = colorWithAlpha(particle.color, particle.life * 0.36);
-      mainCtx.beginPath();
-      mainCtx.arc(particle.x, particle.y, particle.size * particle.life, 0, Math.PI * 2);
-      mainCtx.fill();
-    }
-    mainCtx.globalCompositeOperation = "source-over";
-  }, [movedPoint]);
+  }, []);
 
   const tick = useCallback(
     (time) => {
@@ -951,7 +777,6 @@ export default function MusicalWavesV2() {
       mouse.ly = mouse.y;
       mouse.a = Math.atan2(dy, dx);
 
-      movePoints(time);
       drawFrame();
 
       if (cursorRef.current) {
@@ -960,7 +785,7 @@ export default function MusicalWavesV2() {
 
       rafRef.current = requestAnimationFrame(tick);
     },
-    [drawFrame, movePoints]
+    [drawFrame]
   );
 
   const startAudio = useCallback(async () => {
@@ -1022,7 +847,6 @@ export default function MusicalWavesV2() {
 
   const finishPointer = useCallback(() => {
     pointerDownRef.current = false;
-    lastLineRef.current = -1;
     if (!droneLatched) stopDrone();
   }, [droneLatched, stopDrone]);
 
@@ -1071,7 +895,6 @@ export default function MusicalWavesV2() {
   const onPointerLeave = useCallback(() => {
     if (!pointerDownRef.current) {
       setCursorVisible(false);
-      lastLineRef.current = -1;
     }
   }, []);
 
@@ -1133,17 +956,17 @@ export default function MusicalWavesV2() {
         // Ignore transient audio errors.
       }
 
-      const lineIndex = clamp(
-        Math.floor((noteIndex / Math.max(1, notes.length - 1)) * (lineXRef.current.length - 1)),
-        0,
-        lineXRef.current.length - 1
-      );
-      glowLine(lineIndex, zone, 0.65);
+      const rect = boundingRef.current;
+      if (rect) {
+        const rx = Math.random() * rect.width;
+        const ry = Math.random() * rect.height;
+        injectSplat(rx, ry, 0, 0, zone);
+      }
       idleStepRef.current += 1;
     }, mood.audio.idleEvery);
 
     return () => clearInterval(intervalId);
-  }, [audioStarted, droneActive, flowEnabled, glowLine, graphVersion, mood.audio.idleEvery]);
+  }, [audioStarted, droneActive, flowEnabled, injectSplat, graphVersion, mood.audio.idleEvery]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1173,11 +996,9 @@ export default function MusicalWavesV2() {
   useEffect(() => {
     noiseRef.current = createNoise2D();
     initSize();
-    initLines();
 
     const handleResize = () => {
       initSize();
-      initLines();
     };
 
     window.addEventListener("resize", handleResize);
@@ -1186,8 +1007,9 @@ export default function MusicalWavesV2() {
     return () => {
       window.removeEventListener("resize", handleResize);
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      fluidSimRef.current?.destroy();
     };
-  }, [initLines, initSize, tick]);
+  }, [initSize, tick]);
 
   useEffect(() => {
     return () => disposeAudio();
@@ -1217,8 +1039,7 @@ export default function MusicalWavesV2() {
         onPointerCancel={finishPointer}
         onPointerLeave={onPointerLeave}
       >
-        <canvas ref={mainCanvasRef} className="mw-canvas" />
-        <canvas ref={glowCanvasRef} className="mw-canvas mw-canvas-glow" />
+        <canvas ref={canvasRef} className="mw-canvas" />
 
         <div
           ref={cursorRef}
