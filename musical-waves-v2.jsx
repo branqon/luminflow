@@ -1119,36 +1119,36 @@ export default function MusicalWavesV2() {
       if (!audioReadyRef.current || flowEnabled || droneActive) return;
       if (Date.now() - lastInteractionRef.current < 7000) return;
 
-      const zone = ["sub", "pluck", "crystal"][idleStepRef.current % 3];
+      const rect = boundingRef.current;
+      if (!rect) return;
+
+      // Pick a random position on the canvas
+      const rx = Math.random() * rect.width;
+      const ry = Math.random() * rect.height;
+      const pos = getZoneFromPosition(rx, ry, rect);
+      const zone = pos.zone;
       const notes = scaleNotesRef.current[zone];
-      const pattern = themeRef.current.idlePattern;
       if (!notes || !notes.length) return;
 
-      const noteIndex = clamp(
-        Math.floor(notes.length * 0.22) + pattern[idleStepRef.current % pattern.length],
-        0,
-        notes.length - 1
-      );
+      const scaleSize = SCALES[currentScale].intervals.length;
+      const degree = Math.floor(pos.angle * scaleSize) % scaleSize;
+      const octaveRange = ZONES[zone].octaves[1] - ZONES[zone].octaves[0];
+      const octave = Math.floor(pos.ringDepth * (octaveRange + 0.99));
+      const noteIndex = clamp(octave * scaleSize + degree, 0, notes.length - 1);
+
       const synth = synthsRef.current[zone];
       if (!synth) return;
 
       try {
         synth.triggerAttackRelease(notes[noteIndex], 0.48, Tone.now(), 0.13);
-      } catch (error) {
-        // Ignore transient audio errors.
-      }
+      } catch (error) {}
 
-      const rect = boundingRef.current;
-      if (rect) {
-        const rx = Math.random() * rect.width;
-        const ry = Math.random() * rect.height;
-        injectSplat(rx, ry, 0, 0, zone);
-      }
+      injectSplat(rx, ry, 0, 0, zone);
       idleStepRef.current += 1;
     }, mood.audio.idleEvery);
 
     return () => clearInterval(intervalId);
-  }, [audioStarted, droneActive, flowEnabled, injectSplat, graphVersion, mood.audio.idleEvery]);
+  }, [audioStarted, droneActive, flowEnabled, injectSplat, graphVersion, mood.audio.idleEvery, currentScale]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
