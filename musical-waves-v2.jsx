@@ -1009,14 +1009,15 @@ export default function MusicalWavesV2() {
         if (flowPinnedRef.current) {
           const dist = Math.hypot(mx - flowPinnedRef.current.x, my - flowPinnedRef.current.y);
           if (dist < 40) {
+            // Clicking on the phantom — unpin, flow follows mouse again
             flowPinnedRef.current = null;
-          } else {
-            flowPinnedRef.current = { x: mx, y: my };
+            return;
           }
+          // Clicking elsewhere while pinned — play notes normally (fall through)
         } else {
+          // Flow is following mouse — pin it here, then play notes normally (fall through)
           flowPinnedRef.current = { x: mx, y: my };
         }
-        return;
       }
 
       // Left-click: start playing

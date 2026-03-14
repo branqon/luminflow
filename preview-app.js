@@ -881,13 +881,11 @@ function MusicalWavesV2() {
           const dist = Math.hypot(mx - flowPinnedRef.current.x, my - flowPinnedRef.current.y);
           if (dist < 40) {
             flowPinnedRef.current = null;
-          } else {
-            flowPinnedRef.current = { x: mx, y: my };
+            return;
           }
         } else {
           flowPinnedRef.current = { x: mx, y: my };
         }
-        return;
       }
       pointerDownRef.current = true;
       setPointerDown(true);
