@@ -647,10 +647,13 @@ export default function MusicalWavesV2() {
     const notes = scaleNotesRef.current[zone];
     if (!notes || !notes.length) return { chord: [], sig: "" };
 
-    const xRatio = clamp(mouseRef.current.x / Math.max(1, boundingRef.current.width), 0, 1);
-    const base = zone === "sub" ? 0.08 : zone === "pluck" ? 0.18 : 0.28;
-    const travel = zone === "sub" ? 2 : 4;
-    const idx = clamp(Math.floor(notes.length * base + xRatio * travel), 0, notes.length - 1);
+    const pos = getZoneFromPosition(mouseRef.current.x, mouseRef.current.y, boundingRef.current);
+    const scaleSize = SCALES[currentScale].intervals.length;
+    const degree = Math.floor(pos.angle * scaleSize) % scaleSize;
+    const octaveRange = ZONES[zone].octaves[1] - ZONES[zone].octaves[0];
+    const octave = Math.floor(pos.ringDepth * (octaveRange + 0.99));
+    const idx = clamp(octave * scaleSize + degree, 0, notes.length - 1);
+
     const chord = [
       notes[idx],
       notes[clamp(idx + 2, 0, notes.length - 1)],
@@ -658,7 +661,7 @@ export default function MusicalWavesV2() {
     ].filter((note, index, list) => list.indexOf(note) === index);
 
     return { chord, sig: `${zone}:${chord.join("-")}` };
-  }, []);
+  }, [currentScale]);
 
   const startDrone = useCallback(
     (source = "latched") => {
