@@ -1063,13 +1063,10 @@ export default function MusicalWavesV2() {
 
         <div
           ref={cursorRef}
-          className="mw-cursor"
+          className={`mw-cursor ${pointerDownRef.current ? 'playing' : ''} ${activeEdge ? 'edge' : ''}`}
           style={{
             opacity: audioStarted && cursorVisible ? 1 : 0,
-            boxShadow: `0 0 18px 4px ${colorWithAlpha(
-              mood.zoneColors[currentZone],
-              0.34
-            )}, 0 0 40px 12px ${colorWithAlpha(mood.zoneColors[currentZone], 0.16)}`,
+            boxShadow: activeEdge ? 'none' : `0 0 24px 6px ${colorWithAlpha(mood.zoneColors[currentZone], 0.4)}, 0 0 48px 16px ${colorWithAlpha(mood.zoneColors[currentZone], 0.15)}`,
           }}
         />
 
@@ -1154,6 +1151,14 @@ export default function MusicalWavesV2() {
         </div>
       </div>
 
+      <div className={`mw-watermark ${activeEdge === 'bottom' || activeEdge === 'left' ? 'bright' : ''}`}
+           style={{ color: mood.muted }}>
+        <div className="mw-watermark-mood">{mood.label}</div>
+        <div className="mw-watermark-info">
+          {currentRoot} {SCALES[currentScale].label} &middot; {ZONES[currentZone].label}
+        </div>
+      </div>
+
       <style>{`
         * { box-sizing: border-box; }
         html, body, #root { margin: 0; min-height: 100%; }
@@ -1162,7 +1167,7 @@ export default function MusicalWavesV2() {
           inset: 0;
           overflow: hidden;
           color: var(--text);
-          font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+          font-family: 'Inter', system-ui, sans-serif;
           background:
             radial-gradient(circle at 18% 18%, var(--halo), transparent 28%),
             radial-gradient(circle at 82% 24%, rgba(255,255,255,0.06), transparent 22%),
@@ -1182,15 +1187,21 @@ export default function MusicalWavesV2() {
         .mw-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
         .mw-cursor {
           position: absolute;
-          top: 0;
-          left: 0;
-          width: 10px;
-          height: 10px;
+          top: 0; left: 0;
+          width: 16px; height: 16px;
           border-radius: 999px;
-          background: rgba(255,255,255,0.96);
+          background: radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.3) 40%, transparent 70%);
           pointer-events: none;
-          transition: opacity 0.25s ease, box-shadow 0.35s ease;
+          transition: width 0.25s ease, height 0.25s ease, opacity 0.25s ease;
           transform: translate3d(-120px, -120px, 0);
+          filter: blur(0.5px);
+        }
+        .mw-cursor.playing {
+          width: 24px; height: 24px;
+        }
+        .mw-cursor.edge {
+          width: 12px; height: 12px;
+          background: radial-gradient(circle, rgba(255,255,255,0.7) 0%, transparent 60%);
         }
         .mw-guide {
           position: absolute;
