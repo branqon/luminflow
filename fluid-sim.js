@@ -373,7 +373,7 @@ class FluidSim {
         const gl = canvas.getContext('webgl2', params);
         if (!gl) {
             console.error('FluidSim: WebGL 2.0 not supported');
-            return;
+            return false;
         }
         this.gl = gl;
 
@@ -399,6 +399,7 @@ class FluidSim {
         this._initFramebuffers();
 
         this._initialized = true;
+        return true;
     }
 
     setMoodParams (params) {
@@ -621,7 +622,9 @@ class FluidSim {
         gl.compileShader(shader);
 
         if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-            console.error('FluidSim shader compile error:', gl.getShaderInfoLog(shader));
+            const info = gl.getShaderInfoLog(shader);
+            gl.deleteShader(shader);
+            throw new Error('FluidSim shader compile error: ' + info);
         }
 
         return shader;
@@ -643,7 +646,9 @@ class FluidSim {
         gl.linkProgram(program);
 
         if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-            console.error('FluidSim program link error:', gl.getProgramInfoLog(program));
+            const info = gl.getProgramInfoLog(program);
+            gl.deleteProgram(program);
+            throw new Error('FluidSim program link error: ' + info);
         }
 
         // Clean up individual shaders — they're linked into the program now
