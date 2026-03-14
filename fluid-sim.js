@@ -67,7 +67,6 @@ out vec4 fragColor;
 uniform sampler2D uVelocity;
 uniform sampler2D uSource;
 uniform vec2 texelSize;
-uniform vec2 dyeTexelSize;
 uniform float dt;
 uniform float dissipation;
 
@@ -320,19 +319,6 @@ void main () {
 }
 `;
 
-const copyShaderSource = `#version 300 es
-precision mediump float;
-precision mediump sampler2D;
-
-in vec2 vUv;
-out vec4 fragColor;
-uniform sampler2D uTexture;
-
-void main () {
-    fragColor = texture(uTexture, vUv);
-}
-`;
-
 // ---------------------------------------------------------------------------
 // FluidSim class
 // ---------------------------------------------------------------------------
@@ -521,7 +507,6 @@ class FluidSim {
         const advProg = this._programs.advection;
         gl.useProgram(advProg.program);
         gl.uniform2f(advProg.uniforms.texelSize, velocity.texelSizeX, velocity.texelSizeY);
-        gl.uniform2f(advProg.uniforms.dyeTexelSize, velocity.texelSizeX, velocity.texelSizeY);
         const velId = velocity.read.attach(gl, 0);
         gl.uniform1i(advProg.uniforms.uVelocity, velId);
         gl.uniform1i(advProg.uniforms.uSource, velId);
@@ -531,7 +516,6 @@ class FluidSim {
         velocity.swap();
 
         // 8. Advect dye through velocity
-        gl.uniform2f(advProg.uniforms.dyeTexelSize, dye.texelSizeX, dye.texelSizeY);
         gl.uniform1i(advProg.uniforms.uVelocity, velocity.read.attach(gl, 0));
         gl.uniform1i(advProg.uniforms.uSource, dye.read.attach(gl, 1));
         gl.uniform1f(advProg.uniforms.dissipation, p.diffusion);
@@ -690,7 +674,6 @@ class FluidSim {
         this._programs.bloomBlur = this._createProgram(baseVertexShaderSource, bloomBlurShaderSource);
         this._programs.bloomPrefilter = this._createProgram(baseVertexShaderSource, bloomPrefilterShaderSource);
         this._programs.bloomFinal = this._createProgram(baseVertexShaderSource, bloomFinalShaderSource);
-        this._programs.copy = this._createProgram(baseVertexShaderSource, copyShaderSource);
     }
 
     // -----------------------------------------------------------------------
