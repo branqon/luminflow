@@ -320,7 +320,8 @@ export default function MusicalWavesV2() {
   const initialStateRef = useRef(readInitialState());
 
   const [audioStarted, setAudioStarted] = useState(false);
-  const [showPrompt, setShowPrompt] = useState(true);
+  const [introPhase, setIntroPhase] = useState('black');
+  // Phases: 'black' -> 'title' -> 'ripple' -> 'invite' -> 'playing'
   const [currentMood, setCurrentMood] = useState(initialStateRef.current.mood);
   const [currentScale, setCurrentScale] = useState(initialStateRef.current.scale);
   const [currentRoot, setCurrentRoot] = useState(initialStateRef.current.root);
@@ -333,13 +334,16 @@ export default function MusicalWavesV2() {
     initialStateRef.current.showExperimental
   );
   const [copyStatus, setCopyStatus] = useState("idle");
-  const [guideVisible, setGuideVisible] = useState(true);
   const [cursorVisible, setCursorVisible] = useState(false);
   const [graphVersion, setGraphVersion] = useState(0);
 
   const activeEdgeRef = useRef(null);
   const [activeEdge, setActiveEdge] = useState(null); // 'top' | 'bottom' | 'left' | 'right' | 'all' | null
   const edgeThreshold = 80;
+
+  const hasUrlParams = useRef(
+    typeof window !== 'undefined' && window.location.search.includes('m=')
+  );
 
   const stageRef = useRef(null);
   const canvasRef = useRef(null);
@@ -798,7 +802,7 @@ export default function MusicalWavesV2() {
     rebuildNotes(currentScale, currentRoot);
     await buildAudioGraph(currentMood);
     setAudioStarted(true);
-    setShowPrompt(false);
+    setIntroPhase('playing');
   }, [audioStarted, buildAudioGraph, currentMood, currentRoot, currentScale, rebuildNotes]);
 
   const applyMood = useCallback((key) => {
@@ -834,7 +838,6 @@ export default function MusicalWavesV2() {
     if (!audioStarted) await startAudio();
     setFlowEnabled((value) => !value);
     lastInteractionRef.current = Date.now();
-    setGuideVisible(false);
   }, [audioStarted, startAudio]);
 
   const toggleDrone = useCallback(async () => {
@@ -846,7 +849,6 @@ export default function MusicalWavesV2() {
       return next;
     });
     lastInteractionRef.current = Date.now();
-    setGuideVisible(false);
   }, [audioStarted, startAudio, startDrone, stopDrone]);
 
   const finishPointer = useCallback(() => {
@@ -860,7 +862,6 @@ export default function MusicalWavesV2() {
       event.preventDefault();
       pointerDownRef.current = true;
       lastInteractionRef.current = Date.now();
-      setGuideVisible(false);
       updateMouse(event.clientX, event.clientY);
       if (event.pointerType === "mouse") setCursorVisible(true);
       if (!audioStarted) await startAudio();
@@ -1008,10 +1009,28 @@ export default function MusicalWavesV2() {
   }, [copyStatus]);
 
   useEffect(() => {
-    if (!audioStarted || !guideVisible) return undefined;
-    const timeoutId = window.setTimeout(() => setGuideVisible(false), 12000);
-    return () => clearTimeout(timeoutId);
-  }, [audioStarted, guideVisible]);
+    if (introPhase === 'black') {
+      if (hasUrlParams.current) {
+        setIntroPhase('ripple');
+        return;
+      }
+      const id = setTimeout(() => setIntroPhase('title'), 1000);
+      return () => clearTimeout(id);
+    }
+    if (introPhase === 'title') {
+      const id = setTimeout(() => setIntroPhase('ripple'), 2000);
+      return () => clearTimeout(id);
+    }
+    if (introPhase === 'ripple') {
+      // Trigger a center splat on the fluid sim
+      if (fluidSimRef.current) {
+        const color = themeRef.current.zoneColors.pluck.map(c => c / 255);
+        fluidSimRef.current.addSplat(0.5, 0.5, 0, 0.001, color, 0.01);
+      }
+      const id = setTimeout(() => setIntroPhase('invite'), 2000);
+      return () => clearTimeout(id);
+    }
+  }, [introPhase]);
 
   useEffect(() => {
     noiseRef.current = createNoise2D();
@@ -1070,29 +1089,39 @@ export default function MusicalWavesV2() {
           }}
         />
 
-        {guideVisible && audioStarted && (
-          <div className="mw-guide">
-            Move left for lower notes, right for brighter notes. Slow drags bloom longer tones.
-          </div>
-        )}
-
-        {showPrompt && (
-          <div className="mw-prompt-wrap">
-            <div className="mw-card mw-prompt">
-              <div className="mw-label">Ambient Instrument</div>
-              <h2>Start with one sweep.</h2>
-              <p>Drag anywhere to play. Hold on the field for a soft drone, or tap Flow for hands-free motion.</p>
-              <button
-                className="mw-button primary"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  startAudio();
-                }}
-                onPointerDown={(event) => event.stopPropagation()}
-              >
-                Tap to Begin
-              </button>
-            </div>
+        {introPhase !== 'playing' && (
+          <div
+            className="mw-intro"
+            onClick={introPhase === 'invite' || introPhase === 'ripple' ? async (e) => {
+              e.stopPropagation();
+              await Tone.start();
+              rebuildNotes(currentScale, currentRoot);
+              await buildAudioGraph(currentMood);
+              setAudioStarted(true);
+              setIntroPhase('playing');
+              if (fluidSimRef.current && boundingRef.current) {
+                const rect = boundingRef.current;
+                const color = themeRef.current.zoneColors.pluck.map(c => c / 255);
+                fluidSimRef.current.addSplat(
+                  (e.clientX - rect.left) / rect.width,
+                  1 - (e.clientY - rect.top) / rect.height,
+                  0, 0, color, 0.015
+                );
+              }
+            } : undefined}
+          >
+            {introPhase === 'title' && (
+              <div className="mw-intro-title">
+                <div className="mw-intro-label">Ambient Instrument</div>
+                <h1>{mood.label}</h1>
+                <p>{mood.tagline}</p>
+              </div>
+            )}
+            {(introPhase === 'ripple' || introPhase === 'invite') && (
+              <div className="mw-intro-invite">
+                <p>Touch anywhere to begin</p>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1203,74 +1232,55 @@ export default function MusicalWavesV2() {
           width: 12px; height: 12px;
           background: radial-gradient(circle, rgba(255,255,255,0.7) 0%, transparent 60%);
         }
-        .mw-guide {
-          position: absolute;
-          top: 126px;
-          left: 50%;
-          transform: translateX(-50%);
-          max-width: min(560px, calc(100% - 40px));
-          padding: 12px 18px;
-          border-radius: 999px;
-          border: 1px solid var(--border);
-          background: rgba(8,15,24,0.66);
-          backdrop-filter: blur(18px);
-          color: var(--muted);
-          font-size: 11px;
-          text-align: center;
-          letter-spacing: 0.04em;
-          z-index: 10;
-        }
-        .mw-prompt-wrap {
+        .mw-intro {
           position: absolute;
           inset: 0;
           display: flex;
           align-items: center;
           justify-content: center;
-          padding: 20px;
-          pointer-events: none;
           z-index: 20;
+          cursor: pointer;
         }
-        .mw-prompt {
-          width: min(520px, 100%);
-          padding: 26px;
-          border-radius: 28px;
+        .mw-intro-title, .mw-intro-invite {
           text-align: center;
-          pointer-events: auto;
-          border: 1px solid var(--border);
-          background: linear-gradient(180deg, rgba(255,255,255,0.06), var(--surface));
-          backdrop-filter: blur(18px);
-          -webkit-backdrop-filter: blur(18px);
-          box-shadow: 0 26px 54px rgba(0,0,0,0.26);
+          animation: fade-in 1.5s ease forwards;
         }
-        .mw-prompt h2 {
-          margin: 10px 0 8px;
-          font-family: Georgia, "Times New Roman", serif;
+        .mw-intro-title h1 {
+          font-family: 'Playfair Display', Georgia, serif;
+          font-size: clamp(40px, 8vw, 80px);
           font-weight: 600;
+          color: var(--text);
+          margin: 12px 0 8px;
+          line-height: 1;
           letter-spacing: 0.02em;
-          font-size: clamp(32px, 6vw, 48px);
-          line-height: 0.98;
         }
-        .mw-prompt p {
-          margin: 0 0 20px;
+        .mw-intro-title p {
+          font-family: 'Inter', system-ui, sans-serif;
+          font-size: 14px;
           color: var(--muted);
-          line-height: 1.55;
-          font-size: 13px;
+          letter-spacing: 0.06em;
         }
-        .mw-prompt .mw-label {
-          color: var(--muted);
+        .mw-intro-label {
+          font-family: 'Inter', system-ui, sans-serif;
           font-size: 10px;
+          color: var(--muted);
           letter-spacing: 0.18em;
           text-transform: uppercase;
         }
-        .mw-prompt .mw-button.primary {
-          min-height: 48px;
-          padding: 0 14px;
-          border-radius: 999px;
-          background: linear-gradient(135deg, rgba(255,255,255,0.14), rgba(255,255,255,0.05));
-          color: var(--text);
-          border: 1px solid var(--border);
-          font: inherit;
-          cursor: pointer;
+        .mw-intro-invite p {
+          font-family: 'Inter', system-ui, sans-serif;
+          font-size: 14px;
+          color: var(--muted);
+          letter-spacing: 0.08em;
+          animation: pulse-soft 3s ease-in-out infinite;
+        }
+        @keyframes fade-in {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes pulse-soft {
+          0%, 100% { opacity: 0.5; }
+          50% { opacity: 1; }
         }
         .mw-edge {
           position: absolute;
