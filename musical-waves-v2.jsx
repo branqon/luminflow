@@ -951,13 +951,19 @@ export default function MusicalWavesV2() {
   const onPointerDown = useCallback(
     async (event) => {
       event.preventDefault();
+      // Capture DOM refs before any await — React nulls synthetic events after the handler yields
+      const target = event.currentTarget;
+      const pointerId = event.pointerId;
+      const button = event.button;
+      const pointerType = event.pointerType;
+
       lastInteractionRef.current = Date.now();
       updateMouse(event.clientX, event.clientY);
-      if (event.pointerType === "mouse") setCursorVisible(true);
+      if (pointerType === "mouse") setCursorVisible(true);
 
       if (!audioStarted) await startAudio();
 
-      if (event.button === 2) {
+      if (button === 2) {
         // Right-click: toggle drone
         if (droneLatched) {
           stopDrone();
@@ -969,24 +975,20 @@ export default function MusicalWavesV2() {
         return;
       }
 
-      if (event.button !== 0) return;
+      if (button !== 0) return;
 
       // Flow mode: pin/unpin the phantom cursor
       if (flowActive) {
         const mx = mouseRef.current.x;
         const my = mouseRef.current.y;
         if (flowPinnedRef.current) {
-          // Already pinned — check if clicking near the pinned spot
           const dist = Math.hypot(mx - flowPinnedRef.current.x, my - flowPinnedRef.current.y);
           if (dist < 40) {
-            // Click on phantom → unpin, follow mouse again
             flowPinnedRef.current = null;
           } else {
-            // Click elsewhere → move pin to new spot
             flowPinnedRef.current = { x: mx, y: my };
           }
         } else {
-          // Following mouse → pin at current position
           flowPinnedRef.current = { x: mx, y: my };
         }
         return;
@@ -996,7 +998,7 @@ export default function MusicalWavesV2() {
       pointerDownRef.current = true;
       setPointerDown(true);
       triggerNote(mouseRef.current.x, mouseRef.current.y);
-      event.currentTarget.setPointerCapture?.(event.pointerId);
+      target?.setPointerCapture?.(pointerId);
     },
     [audioStarted, droneLatched, flowActive, startAudio, startDrone, stopDrone, triggerNote, updateMouse]
   );

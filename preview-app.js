@@ -832,11 +832,15 @@ function MusicalWavesV2() {
   const onPointerDown = useCallback(
     async (event) => {
       event.preventDefault();
+      const target = event.currentTarget;
+      const pointerId = event.pointerId;
+      const button = event.button;
+      const pointerType = event.pointerType;
       lastInteractionRef.current = Date.now();
       updateMouse(event.clientX, event.clientY);
-      if (event.pointerType === "mouse") setCursorVisible(true);
+      if (pointerType === "mouse") setCursorVisible(true);
       if (!audioStarted) await startAudio();
-      if (event.button === 2) {
+      if (button === 2) {
         if (droneLatched) {
           stopDrone();
           setDroneLatched(false);
@@ -846,7 +850,7 @@ function MusicalWavesV2() {
         }
         return;
       }
-      if (event.button !== 0) return;
+      if (button !== 0) return;
       if (flowActive) {
         const mx = mouseRef.current.x;
         const my = mouseRef.current.y;
@@ -865,7 +869,7 @@ function MusicalWavesV2() {
       pointerDownRef.current = true;
       setPointerDown(true);
       triggerNote(mouseRef.current.x, mouseRef.current.y);
-      event.currentTarget.setPointerCapture?.(event.pointerId);
+      target?.setPointerCapture?.(pointerId);
     },
     [audioStarted, droneLatched, flowActive, startAudio, startDrone, stopDrone, triggerNote, updateMouse]
   );
