@@ -309,6 +309,7 @@ export default function MusicalWavesV2() {
 
   const stageRef = useRef(null);
   const canvasRef = useRef(null);
+  const introRef = useRef(null);
   const cursorRef = useRef(null);
   const phantomCursorRef = useRef(null);
   const [dronePosition, setDronePosition] = useState(null);
@@ -467,7 +468,7 @@ export default function MusicalWavesV2() {
         .connect(delay);
 
       const crystal = new Tone.PolySynth(Tone.Synth, {
-        maxPolyphony: 5,
+        maxPolyphony: 8,
 
         options: {
           oscillator: { type: "fatsine", spread: 18, count: 3 },
@@ -482,7 +483,7 @@ export default function MusicalWavesV2() {
       }).connect(chorus);
 
       const pluck = new Tone.PolySynth(Tone.Synth, {
-        maxPolyphony: 5,
+        maxPolyphony: 8,
 
         options: {
           oscillator: { type: "triangle" },
@@ -497,7 +498,7 @@ export default function MusicalWavesV2() {
       }).connect(delay);
 
       const sub = new Tone.PolySynth(Tone.Synth, {
-        maxPolyphony: 6,
+        maxPolyphony: 10,
 
         options: {
           oscillator: { type: "sine" },
@@ -541,6 +542,11 @@ export default function MusicalWavesV2() {
     const rect = stageRef.current.getBoundingClientRect();
     boundingRef.current = rect;
     if (canvasRef.current) {
+      // Account for devicePixelRatio to avoid dark borders on HiDPI displays
+      const dpr = window.devicePixelRatio || 1;
+      canvasRef.current.width = rect.width * dpr;
+      canvasRef.current.height = rect.height * dpr;
+
       if (!fluidSimRef.current && !webglTriedRef.current) {
         webglTriedRef.current = true;
         fluidSimRef.current = new window.FluidSim();
@@ -551,7 +557,7 @@ export default function MusicalWavesV2() {
         }
       }
       if (fluidSimRef.current) {
-        fluidSimRef.current.resize(rect.width, rect.height);
+        fluidSimRef.current.resize(rect.width * dpr, rect.height * dpr);
         fluidSimRef.current.setMoodParams(themeRef.current.fluid);
       }
     }
@@ -908,6 +914,9 @@ export default function MusicalWavesV2() {
     } catch (error) {
       setCopyStatus("failed");
     }
+    // Keep the top edge visible so user sees the confirmation
+    activeEdgeRef.current = 'top';
+    setActiveEdge('top');
   }, []);
 
   const toggleFlow = useCallback(async () => {
@@ -1159,6 +1168,22 @@ export default function MusicalWavesV2() {
   }, [introPhase]);
 
   useEffect(() => {
+    if (!introInteractive) return undefined;
+
+    const handleIntroKey = (event) => {
+      if (event.defaultPrevented) return;
+      if (event.key !== "Enter" && event.key !== " ") return;
+      if (document.activeElement !== introRef.current) return;
+
+      event.preventDefault();
+      void activateIntro();
+    };
+
+    window.addEventListener("keydown", handleIntroKey);
+    return () => window.removeEventListener("keydown", handleIntroKey);
+  }, [activateIntro, introInteractive]);
+
+  useEffect(() => {
     initSize();
 
     let resizeTimer;
@@ -1249,6 +1274,7 @@ export default function MusicalWavesV2() {
 
         {introPhase !== 'playing' && (
           <div
+            ref={introRef}
             className="mw-intro"
             role={introInteractive ? "button" : undefined}
             tabIndex={introInteractive ? 0 : -1}
@@ -1266,7 +1292,7 @@ export default function MusicalWavesV2() {
           >
             {introPhase === 'title' && (
               <div className="mw-intro-title">
-                <div className="mw-intro-label">Ambient Instrument</div>
+                <div className="mw-intro-label">Musical Waves</div>
                 <h1>{mood.label}</h1>
                 <p>{mood.tagline}</p>
               </div>
@@ -1340,10 +1366,13 @@ export default function MusicalWavesV2() {
       <nav className={`mw-edge mw-edge-left ${activeEdge === 'left' || activeEdge === 'all' ? 'visible' : ''}`} aria-label="Zone selector">
         <div className="mw-edge-content">
           {Object.keys(ZONES).map((zone) => (
-            <span key={zone} className={`mw-edge-glyph ${currentZone === zone ? 'active' : ''}`}
-              style={currentZone === zone ? { color: colorWithAlpha(mood.zoneColors[zone], 1) } : {}}>
+            <button key={zone} className={`mw-edge-glyph ${currentZone === zone ? 'active' : ''}`}
+              style={currentZone === zone ? { color: colorWithAlpha(mood.zoneColors[zone], 1) } : {}}
+              onClick={() => setCurrentZone(zone)}
+              aria-label={`Zone: ${ZONES[zone].label}`}
+              aria-pressed={currentZone === zone}>
               {ZONES[zone].label}
-            </span>
+            </button>
           ))}
         </div>
       </nav>
@@ -1737,13 +1766,16 @@ export default function MusicalWavesV2() {
           color: var(--muted);
           font-size: 11px;
           letter-spacing: 0.08em;
-          text-transform: uppercase;
         }
         .mw-edge-glyph {
           font-family: 'Inter', system-ui, sans-serif;
           font-size: 11px;
           letter-spacing: 0.14em;
           text-transform: uppercase;
+          background: none;
+          border: none;
+          padding: 8px 4px;
+          cursor: pointer;
           color: var(--muted);
           transition: color 0.3s ease;
         }

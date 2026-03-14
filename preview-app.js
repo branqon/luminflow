@@ -293,6 +293,7 @@ function MusicalWavesV2() {
   );
   const stageRef = useRef(null);
   const canvasRef = useRef(null);
+  const introRef = useRef(null);
   const cursorRef = useRef(null);
   const phantomCursorRef = useRef(null);
   const [dronePosition, setDronePosition] = useState(null);
@@ -426,7 +427,7 @@ function MusicalWavesV2() {
         wet: settings.chorusWet
       }).start().connect(delay);
       const crystal = new Tone.PolySynth(Tone.Synth, {
-        maxPolyphony: 5,
+        maxPolyphony: 8,
         options: {
           oscillator: { type: "fatsine", spread: 18, count: 3 },
           envelope: {
@@ -439,7 +440,7 @@ function MusicalWavesV2() {
         }
       }).connect(chorus);
       const pluck = new Tone.PolySynth(Tone.Synth, {
-        maxPolyphony: 5,
+        maxPolyphony: 8,
         options: {
           oscillator: { type: "triangle" },
           envelope: {
@@ -452,7 +453,7 @@ function MusicalWavesV2() {
         }
       }).connect(delay);
       const sub = new Tone.PolySynth(Tone.Synth, {
-        maxPolyphony: 6,
+        maxPolyphony: 10,
         options: {
           oscillator: { type: "sine" },
           envelope: {
@@ -491,6 +492,9 @@ function MusicalWavesV2() {
     const rect = stageRef.current.getBoundingClientRect();
     boundingRef.current = rect;
     if (canvasRef.current) {
+      const dpr = window.devicePixelRatio || 1;
+      canvasRef.current.width = rect.width * dpr;
+      canvasRef.current.height = rect.height * dpr;
       if (!fluidSimRef.current && !webglTriedRef.current) {
         webglTriedRef.current = true;
         fluidSimRef.current = new window.FluidSim();
@@ -501,7 +505,7 @@ function MusicalWavesV2() {
         }
       }
       if (fluidSimRef.current) {
-        fluidSimRef.current.resize(rect.width, rect.height);
+        fluidSimRef.current.resize(rect.width * dpr, rect.height * dpr);
         fluidSimRef.current.setMoodParams(themeRef.current.fluid);
       }
     }
@@ -790,6 +794,8 @@ function MusicalWavesV2() {
     } catch (error) {
       setCopyStatus("failed");
     }
+    activeEdgeRef.current = "top";
+    setActiveEdge("top");
   }, []);
   const toggleFlow = useCallback(async () => {
     if (!audioStarted) await startAudio();
@@ -999,6 +1005,18 @@ function MusicalWavesV2() {
     }
   }, [introPhase]);
   useEffect(() => {
+    if (!introInteractive) return void 0;
+    const handleIntroKey = (event) => {
+      if (event.defaultPrevented) return;
+      if (event.key !== "Enter" && event.key !== " ") return;
+      if (document.activeElement !== introRef.current) return;
+      event.preventDefault();
+      void activateIntro();
+    };
+    window.addEventListener("keydown", handleIntroKey);
+    return () => window.removeEventListener("keydown", handleIntroKey);
+  }, [activateIntro, introInteractive]);
+  useEffect(() => {
     initSize();
     let resizeTimer;
     const handleResize = () => {
@@ -1082,6 +1100,7 @@ function MusicalWavesV2() {
               introPhase !== "playing" && /* @__PURE__ */ jsxs(
                 "div",
                 {
+                  ref: introRef,
                   className: "mw-intro",
                   role: introInteractive ? "button" : void 0,
                   tabIndex: introInteractive ? 0 : -1,
@@ -1098,7 +1117,7 @@ function MusicalWavesV2() {
                   } : void 0,
                   children: [
                     introPhase === "title" && /* @__PURE__ */ jsxs("div", { className: "mw-intro-title", children: [
-                      /* @__PURE__ */ jsx("div", { className: "mw-intro-label", children: "Ambient Instrument" }),
+                      /* @__PURE__ */ jsx("div", { className: "mw-intro-label", children: "Musical Waves" }),
                       /* @__PURE__ */ jsx("h1", { children: mood.label }),
                       /* @__PURE__ */ jsx("p", { children: mood.tagline })
                     ] }),
@@ -1158,10 +1177,13 @@ function MusicalWavesV2() {
           )
         ] }) }),
         /* @__PURE__ */ jsx("nav", { className: `mw-edge mw-edge-left ${activeEdge === "left" || activeEdge === "all" ? "visible" : ""}`, "aria-label": "Zone selector", children: /* @__PURE__ */ jsx("div", { className: "mw-edge-content", children: Object.keys(ZONES).map((zone) => /* @__PURE__ */ jsx(
-          "span",
+          "button",
           {
             className: `mw-edge-glyph ${currentZone === zone ? "active" : ""}`,
             style: currentZone === zone ? { color: colorWithAlpha(mood.zoneColors[zone], 1) } : {},
+            onClick: () => setCurrentZone(zone),
+            "aria-label": `Zone: ${ZONES[zone].label}`,
+            "aria-pressed": currentZone === zone,
             children: ZONES[zone].label
           },
           zone
@@ -1561,13 +1583,16 @@ function MusicalWavesV2() {
           color: var(--muted);
           font-size: 11px;
           letter-spacing: 0.08em;
-          text-transform: uppercase;
         }
         .mw-edge-glyph {
           font-family: 'Inter', system-ui, sans-serif;
           font-size: 11px;
           letter-spacing: 0.14em;
           text-transform: uppercase;
+          background: none;
+          border: none;
+          padding: 8px 4px;
+          cursor: pointer;
           color: var(--muted);
           transition: color 0.3s ease;
         }
