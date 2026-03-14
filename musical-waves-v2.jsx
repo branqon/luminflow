@@ -337,6 +337,7 @@ export default function MusicalWavesV2() {
   const [copyStatus, setCopyStatus] = useState("idle");
   const [cursorVisible, setCursorVisible] = useState(false);
   const [graphVersion, setGraphVersion] = useState(0);
+  const [webglAvailable, setWebglAvailable] = useState(true);
 
   const activeEdgeRef = useRef(null);
   const [activeEdge, setActiveEdge] = useState(null); // 'top' | 'bottom' | 'left' | 'right' | 'all' | null
@@ -349,6 +350,8 @@ export default function MusicalWavesV2() {
   const stageRef = useRef(null);
   const canvasRef = useRef(null);
   const cursorRef = useRef(null);
+  const phantomCursorRef = useRef(null);
+  const dronePositionRef = useRef(null);
   const boundingRef = useRef(null);
   const fluidSimRef = useRef(null);
   const lastFrameTimeRef = useRef(performance.now());
@@ -572,7 +575,11 @@ export default function MusicalWavesV2() {
     if (canvasRef.current) {
       if (!fluidSimRef.current) {
         fluidSimRef.current = new window.FluidSim();
-        fluidSimRef.current.init(canvasRef.current);
+        const success = fluidSimRef.current.init(canvasRef.current);
+        if (!success) {
+          setWebglAvailable(false);
+          fluidSimRef.current = null;
+        }
       }
       fluidSimRef.current.resize(rect.width, rect.height);
       fluidSimRef.current.setMoodParams(themeRef.current.fluid);
@@ -644,6 +651,7 @@ export default function MusicalWavesV2() {
         droneChangeRef.current = Tone.now();
         setCurrentZone(zone);
         setDroneActive(true);
+        dronePositionRef.current = { x: mouseRef.current.sx, y: mouseRef.current.sy };
       } catch (error) {
         // Ignore transient audio errors.
       }
@@ -740,6 +748,12 @@ export default function MusicalWavesV2() {
       (Math.random() - 0.5) * 20,
       zone
     );
+
+    if (phantomCursorRef.current && boundingRef.current) {
+      const px = rect.width * xRatio;
+      const py = rect.height * yRatio;
+      phantomCursorRef.current.style.transform = `translate3d(${px - 8}px, ${py - 8}px, 0)`;
+    }
 
     if (step === pattern.length - 1) flowRef.current.direction *= -1;
     flowRef.current.step += 1;
@@ -1078,6 +1092,21 @@ export default function MusicalWavesV2() {
     return () => disposeAudio();
   }, [disposeAudio]);
 
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Tab') {
+        setActiveEdge('all');
+        activeEdgeRef.current = 'all';
+      }
+      if (e.key === 'Escape') {
+        setActiveEdge(null);
+        activeEdgeRef.current = null;
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   return (
     <div
       className="mw-shell"
@@ -1112,6 +1141,21 @@ export default function MusicalWavesV2() {
             boxShadow: activeEdge ? 'none' : `0 0 24px 6px ${colorWithAlpha(mood.zoneColors[currentZone], 0.4)}, 0 0 48px 16px ${colorWithAlpha(mood.zoneColors[currentZone], 0.15)}`,
           }}
         />
+
+        {flowActive && (
+          <div ref={phantomCursorRef} className="mw-cursor mw-cursor-phantom" style={{
+            opacity: 0.6,
+            boxShadow: `0 0 20px 5px ${colorWithAlpha(mood.zoneColors[currentZone], 0.25)}`,
+          }} />
+        )}
+
+        {droneActive && dronePositionRef.current && (
+          <div className="mw-drone-ring" style={{
+            left: dronePositionRef.current.x,
+            top: dronePositionRef.current.y,
+            borderColor: colorWithAlpha(mood.zoneColors[currentZone], 0.3),
+          }} />
+        )}
 
         {introPhase !== 'playing' && (
           <div
@@ -1262,6 +1306,24 @@ export default function MusicalWavesV2() {
         .mw-cursor.edge {
           width: 12px; height: 12px;
           background: radial-gradient(circle, rgba(255,255,255,0.7) 0%, transparent 60%);
+        }
+        .mw-cursor-phantom {
+          opacity: 0.6;
+          filter: blur(1.5px);
+        }
+        .mw-drone-ring {
+          position: absolute;
+          width: 80px; height: 80px;
+          border-radius: 50%;
+          border: 1px solid;
+          transform: translate(-50%, -50%);
+          pointer-events: none;
+          animation: breathe 3s ease-in-out infinite;
+          z-index: 4;
+        }
+        @keyframes breathe {
+          0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.4; }
+          50% { transform: translate(-50%, -50%) scale(1.08); opacity: 0.7; }
         }
         .mw-intro {
           position: absolute;
@@ -1480,6 +1542,20 @@ export default function MusicalWavesV2() {
         @keyframes flood {
           from { opacity: 1; }
           to { opacity: 0; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .mw-cursor, .mw-edge, .mw-transition, .mw-watermark,
+          .mw-intro-title, .mw-intro-invite, .mw-drone-ring, .mw-cursor-phantom {
+            transition: none !important;
+            animation: none !important;
+          }
+        }
+        @media (max-width: 760px) {
+          .mw-stage { cursor: default; }
+          .mw-watermark-mood { font-size: 48px; }
+          .mw-watermark-info { font-size: 11px; }
+          .mw-edge-right { width: 160px; }
+          .mw-intro-title h1 { font-size: clamp(32px, 6vw, 56px); }
         }
       `}</style>
     </div>
