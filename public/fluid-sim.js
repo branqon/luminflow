@@ -1,5 +1,5 @@
 /*
- * fluid-sim.js — WebGL 2.0 Fluid Simulation Engine for Musical Waves
+ * fluid-sim.js — WebGL 2.0 Fluid Simulation Engine for Luminflow
  *
  * Adapted from Pavel Dobryakov's WebGL Fluid Simulation (MIT License)
  * https://github.com/PavelDoGreat/WebGL-Fluid-Simulation

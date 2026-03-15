@@ -1,8 +1,8 @@
-# Musical Waves — Design Document
+# Luminflow — Design Document
 
 ## Overview
 
-Musical Waves is a browser-based ambient instrument for creating generative soundscapes. Users interact with a full-screen WebGL fluid canvas — left-click-hold and drag to play notes, right-click to latch a drone chord, and toggle Flow mode for hands-free auto-play. The UI uses edge-emergent controls that appear when the cursor approaches screen edges, keeping the canvas uncluttered during play.
+Luminflow is a browser-based ambient instrument for creating generative soundscapes. Users interact with a full-screen WebGL fluid canvas — left-click-hold and drag to play notes, right-click to latch a drone chord, and toggle Flow mode for hands-free auto-play. The UI uses edge-emergent controls that appear when the cursor approaches screen edges, keeping the canvas uncluttered during play.
 
 ## Tech Stack
 
@@ -156,7 +156,7 @@ Lower-left corner, always visible at 15% opacity:
 Phase-based state machine: `black` → `title` → `ripple` → `invite` → `playing`
 
 1. **Black** (1s) — dark canvas
-2. **Title** (2s) — "Musical Waves" label, mood name, tagline fade in
+2. **Title** (2s) — "Luminflow" label, mood name, tagline fade in
 3. **Ripple** (2s) — fluid bloom from center, simulation running at idle
 4. **Invite** — "Touch anywhere to begin" pulses, entire screen is the trigger
 5. **Playing** — audio starts, title dissolves, user is playing

@@ -1377,7 +1377,7 @@ export default function MusicalWavesV2() {
           >
             {introPhase === 'title' && (
               <div className="mw-intro-title">
-                <div className="mw-intro-label">Musical Waves</div>
+                <div className="mw-intro-label">Luminflow</div>
                 <h1>{mood.label}</h1>
                 <p>{mood.tagline}</p>
               </div>

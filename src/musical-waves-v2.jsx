@@ -1325,7 +1325,7 @@ export default function MusicalWavesV2() {
             className="mw-intro"
             role={introInteractive ? "button" : undefined}
             tabIndex={introInteractive ? 0 : -1}
-            aria-label={introInteractive ? "Start musical waves" : undefined}
+            aria-label={introInteractive ? "Start Luminflow" : undefined}
             onClick={introInteractive ? async (e) => {
               e.stopPropagation();
               await activateIntro(e.clientX, e.clientY);
@@ -1339,7 +1339,7 @@ export default function MusicalWavesV2() {
           >
             {introPhase === 'title' && (
               <div className="mw-intro-title">
-                <div className="mw-intro-label">Musical Waves</div>
+                <div className="mw-intro-label">Luminflow</div>
                 <h1>{mood.label}</h1>
                 <p>{mood.tagline}</p>
               </div>
