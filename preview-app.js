@@ -581,11 +581,11 @@ function MusicalWavesV2() {
       radius
     );
   }, []);
-  const getDroneChord = useCallback((zone) => {
+  const getDroneChord = useCallback((zone, posX, posY) => {
     if (!boundingRef.current) return { chord: [], sig: "" };
     const notes = scaleNotesRef.current[zone];
     if (!notes || !notes.length) return { chord: [], sig: "" };
-    const xRatio = clamp(mouseRef.current.x / Math.max(1, boundingRef.current.width), 0, 1);
+    const xRatio = clamp(posX / Math.max(1, boundingRef.current.width), 0, 1);
     const base = zone === "sub" ? 0.08 : zone === "pluck" ? 0.18 : 0.28;
     const travel = zone === "sub" ? 2 : 4;
     const idx = clamp(Math.floor(notes.length * base + xRatio * travel), 0, notes.length - 1);
@@ -603,13 +603,7 @@ function MusicalWavesV2() {
       const posY = droneLatchPosRef.current ? droneLatchPosRef.current.y : mouseRef.current.y;
       const yRatio = clamp(posY / Math.max(1, boundingRef.current.height), 0, 1);
       const zone = mouseRef.current.set || droneLatchPosRef.current ? getZone(yRatio) : "pluck";
-      const savedX = mouseRef.current.x;
-      const savedY = mouseRef.current.y;
-      mouseRef.current.x = posX;
-      mouseRef.current.y = posY;
-      const { chord, sig } = getDroneChord(zone);
-      mouseRef.current.x = savedX;
-      mouseRef.current.y = savedY;
+      const { chord, sig } = getDroneChord(zone, posX, posY);
       if (!chord.length || sig === droneSigRef.current) return;
       try {
         if (droneNoteRef.current) droneSynthRef.current.triggerRelease(droneNoteRef.current);
@@ -617,23 +611,16 @@ function MusicalWavesV2() {
         droneNoteRef.current = chord;
         droneSigRef.current = sig;
         droneChangeRef.current = Tone.now();
-        setCurrentZone(zone);
         setDroneActive(true);
         if (!droneLatchPosRef.current) {
           droneLatchPosRef.current = { x: posX, y: posY };
         }
-        const smoothX = droneLatchPosRef.current ? droneLatchPosRef.current.x : mouseRef.current.sx;
-        const smoothY = droneLatchPosRef.current ? droneLatchPosRef.current.y : mouseRef.current.sy;
-        setDronePosition({ x: smoothX, y: smoothY });
+        setDronePosition({ x: droneLatchPosRef.current.x, y: droneLatchPosRef.current.y });
       } catch (error) {
       }
     },
     [getDroneChord]
   );
-  const refreshDrone = useCallback(() => {
-    if (!droneActive || Tone.now() - droneChangeRef.current < 0.32) return;
-    startDrone(droneLatched ? "latched" : "touch");
-  }, [droneActive, droneLatched, startDrone]);
   const triggerNote = useCallback(
     (x, y) => {
       if (!audioReadyRef.current || !boundingRef.current) return;
@@ -857,8 +844,12 @@ function MusicalWavesV2() {
     if (!audioStarted) await startAudio();
     setDroneLatched((value) => {
       const next = !value;
-      if (next) startDrone("latched");
-      else if (!pointerDownRef.current) stopDrone();
+      if (next) {
+        droneLatchPosRef.current = { x: mouseRef.current.x, y: mouseRef.current.y };
+        startDrone("latched");
+      } else {
+        stopDrone();
+      }
       return next;
     });
     lastInteractionRef.current = Date.now();
