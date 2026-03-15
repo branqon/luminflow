@@ -1073,13 +1073,12 @@ export default function MusicalWavesV2() {
         return;
       }
 
-      // Left button held — trigger notes
+      // Left button held — trigger notes (drone stays where it was latched)
       if (audioReadyRef.current) {
         triggerNote(mouseRef.current.x, mouseRef.current.y);
-        if (droneLatched) refreshDrone();
       }
     },
-    [droneLatched, refreshDrone, triggerNote, updateMouse]
+    [triggerNote, updateMouse]
   );
 
   const onPointerUp = useCallback(

@@ -935,10 +935,9 @@ function MusicalWavesV2() {
       }
       if (audioReadyRef.current) {
         triggerNote(mouseRef.current.x, mouseRef.current.y);
-        if (droneLatched) refreshDrone();
       }
     },
-    [droneLatched, refreshDrone, triggerNote, updateMouse]
+    [triggerNote, updateMouse]
   );
   const onPointerUp = useCallback(
     (event) => {
