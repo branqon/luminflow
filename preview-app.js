@@ -333,6 +333,7 @@ function MusicalWavesV2() {
   const cursorRef = useRef(null);
   const phantomCursorRef = useRef(null);
   const [dronePosition, setDronePosition] = useState(null);
+  const droneLatchPosRef = useRef(null);
   const boundingRef = useRef(null);
   const fluidSimRef = useRef(null);
   const lastFrameTimeRef = useRef(performance.now());
@@ -396,6 +397,7 @@ function MusicalWavesV2() {
     }
     droneNoteRef.current = null;
     droneSigRef.current = "";
+    droneLatchPosRef.current = null;
     setDroneActive(false);
   }, []);
   const stopFlow = useCallback(() => {
@@ -597,9 +599,17 @@ function MusicalWavesV2() {
   const startDrone = useCallback(
     (source = "latched") => {
       if (!audioReadyRef.current || !boundingRef.current || !droneSynthRef.current) return;
-      const yRatio = clamp(mouseRef.current.y / Math.max(1, boundingRef.current.height), 0, 1);
-      const zone = mouseRef.current.set ? getZone(yRatio) : "pluck";
+      const posX = droneLatchPosRef.current ? droneLatchPosRef.current.x : mouseRef.current.x;
+      const posY = droneLatchPosRef.current ? droneLatchPosRef.current.y : mouseRef.current.y;
+      const yRatio = clamp(posY / Math.max(1, boundingRef.current.height), 0, 1);
+      const zone = mouseRef.current.set || droneLatchPosRef.current ? getZone(yRatio) : "pluck";
+      const savedX = mouseRef.current.x;
+      const savedY = mouseRef.current.y;
+      mouseRef.current.x = posX;
+      mouseRef.current.y = posY;
       const { chord, sig } = getDroneChord(zone);
+      mouseRef.current.x = savedX;
+      mouseRef.current.y = savedY;
       if (!chord.length || sig === droneSigRef.current) return;
       try {
         if (droneNoteRef.current) droneSynthRef.current.triggerRelease(droneNoteRef.current);
@@ -609,7 +619,12 @@ function MusicalWavesV2() {
         droneChangeRef.current = Tone.now();
         setCurrentZone(zone);
         setDroneActive(true);
-        setDronePosition({ x: mouseRef.current.sx, y: mouseRef.current.sy });
+        if (!droneLatchPosRef.current) {
+          droneLatchPosRef.current = { x: posX, y: posY };
+        }
+        const smoothX = droneLatchPosRef.current ? droneLatchPosRef.current.x : mouseRef.current.sx;
+        const smoothY = droneLatchPosRef.current ? droneLatchPosRef.current.y : mouseRef.current.sy;
+        setDronePosition({ x: smoothX, y: smoothY });
       } catch (error) {
       }
     },
@@ -867,7 +882,9 @@ function MusicalWavesV2() {
         if (droneLatched) {
           stopDrone();
           setDroneLatched(false);
+          droneLatchPosRef.current = null;
         } else {
+          droneLatchPosRef.current = { x: mouseRef.current.x, y: mouseRef.current.y };
           setDroneLatched(true);
           startDrone("latched");
         }
