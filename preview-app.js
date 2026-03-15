@@ -1141,14 +1141,14 @@ function MusicalWavesV2() {
               droneActive && dronePosition && /* @__PURE__ */ jsxs("div", { className: "mw-drone-ring", style: {
                 left: dronePosition.x,
                 top: dronePosition.y,
-                borderColor: colorWithAlpha(mood.zoneColors[droneZone], 0.5),
-                boxShadow: `0 0 18px 4px ${colorWithAlpha(mood.zoneColors[droneZone], 0.2)}, 0 0 40px 12px ${colorWithAlpha(mood.zoneColors[droneZone], 0.08)}, inset 0 0 18px 4px ${colorWithAlpha(mood.zoneColors[droneZone], 0.1)}`
+                borderColor: colorWithAlpha(mood.zoneColors[droneZone], 0.7),
+                boxShadow: `0 0 24px 8px ${colorWithAlpha(mood.zoneColors[droneZone], 0.4)}, 0 0 60px 20px ${colorWithAlpha(mood.zoneColors[droneZone], 0.2)}, 0 0 100px 40px ${colorWithAlpha(mood.zoneColors[droneZone], 0.08)}, inset 0 0 24px 8px ${colorWithAlpha(mood.zoneColors[droneZone], 0.2)}`
               }, children: [
                 /* @__PURE__ */ jsx("div", { className: "mw-drone-ripple", style: {
-                  borderColor: colorWithAlpha(mood.zoneColors[droneZone], 0.15)
+                  borderColor: colorWithAlpha(mood.zoneColors[droneZone], 0.35)
                 } }),
                 /* @__PURE__ */ jsx("div", { className: "mw-drone-ripple mw-drone-ripple-2", style: {
-                  borderColor: colorWithAlpha(mood.zoneColors[droneZone], 0.08)
+                  borderColor: colorWithAlpha(mood.zoneColors[droneZone], 0.2)
                 } })
               ] }),
               introPhase !== "playing" && /* @__PURE__ */ jsxs(
@@ -1372,7 +1372,7 @@ function MusicalWavesV2() {
           position: absolute;
           width: 80px; height: 80px;
           border-radius: 50%;
-          border: 1.5px solid;
+          border: 2px solid;
           transform: translate(-50%, -50%);
           pointer-events: none;
           animation: breathe 3s ease-in-out infinite;
@@ -1390,8 +1390,8 @@ function MusicalWavesV2() {
           animation-delay: 1.5s;
         }
         @keyframes breathe {
-          0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
-          50% { transform: translate(-50%, -50%) scale(1.06); opacity: 0.85; }
+          0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.6; }
+          50% { transform: translate(-50%, -50%) scale(1.08); opacity: 1; }
         }
         @keyframes ripple-out {
           0% { transform: scale(1); opacity: 1; }
