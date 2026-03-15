@@ -1670,6 +1670,8 @@ export default function MusicalWavesV2() {
         }
         .mw-edge.visible, .mw-edge:focus-within {
           opacity: 1;
+        }
+        .mw-edge.visible .mw-edge-content, .mw-edge:focus-within .mw-edge-content {
           pointer-events: auto;
         }
         .mw-edge-top,
