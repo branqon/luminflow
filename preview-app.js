@@ -900,7 +900,8 @@ function MusicalWavesV2() {
       triggerNote(mouseRef.current.x, mouseRef.current.y);
       target?.setPointerCapture?.(pointerId);
     },
-    [audioStarted, droneLatched, flowActive, startAudio, startDrone, stopDrone, triggerNote, updateMouse]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [audioStarted, droneLatched, flowActive, startAudio, stopDrone, triggerNote, updateMouse]
   );
   const onPointerMove = useCallback(
     (event) => {
@@ -963,9 +964,11 @@ function MusicalWavesV2() {
     rebuildNotes(currentScale, currentRoot);
   }, [currentScale, currentRoot, rebuildNotes]);
   useEffect(() => {
-    if (!audioStarted || !audioReadyRef.current) return;
-    if (droneLatched) startDrone("latched");
-  }, [audioStarted, currentRoot, currentScale, droneLatched, startDrone]);
+    if (!audioStarted || !audioReadyRef.current || !droneLatched) return;
+    if (!droneLatchPosRef.current) return;
+    rebuildNotes(currentScale, currentRoot);
+    startDrone("latched");
+  }, [audioStarted, currentRoot, currentScale, droneLatched]);
   useEffect(() => {
     if (!audioStarted || !flowEnabled || !audioReadyRef.current) {
       stopFlow();
