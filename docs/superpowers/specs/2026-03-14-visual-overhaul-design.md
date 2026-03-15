@@ -1,277 +1,269 @@
-# Musical Waves — Visual Overhaul Design
+# Musical Waves — Design Document
 
 ## Overview
 
-A comprehensive visual overhaul of Musical Waves transforming it from a glassmorphism card-based UI into a fully immersive, organic instrument where the canvas IS the interface. The approach is "Liquid Canvas" — controls emerge from screen edges as luminous elements, a WebGL fluid simulation replaces the particle canvas, and each mood becomes a completely different visual world.
+Musical Waves is a browser-based ambient instrument for creating generative soundscapes. Users interact with a full-screen WebGL fluid canvas — left-click-hold and drag to play notes, right-click to latch a drone chord, and toggle Flow mode for hands-free auto-play. The UI uses edge-emergent controls that appear when the cursor approaches screen edges, keeping the canvas uncluttered during play.
 
-## Design Principles
+## Tech Stack
 
-- **Organic/immersive**: UI dissolves into the experience, never feels bolted on
-- **Persistent but integrated**: Key info (mood, key, scale) stays visible as part of the art
-- **Each mood = a different world**: Unique fluid physics, textures, colors, idle behavior
-- **Dramatic reveal**: The intro is a cinematic moment, not a dialog box
+- **React 18** via ESM importmap (esm.sh, no build step)
+- **Tone.js 15** for audio synthesis and effects
+- **WebGL 2.0** fluid simulation (custom `fluid-sim.js`, Navier-Stokes solver)
+- **Google Fonts** — Playfair Display (headings/watermark) + Inter (controls)
 
----
+## Architecture
 
-## 1. Fluid Canvas Rendering
-
-Replace the current particle/wave canvas with a WebGL fluid simulation using fragment shaders. The fluid reacts to pointer movement — dragging creates flowing trails of color that dissipate over time like ink in water.
-
-### How it works
-
-- Velocity field tracks pointer motion and feeds into a Navier-Stokes-lite solver (advection, diffusion, pressure)
-- Color is injected at the cursor position based on the current zone:
-  - Crystal: bright, high-frequency splashes
-  - Pluck: mid-tone ribbons
-  - Sub: deep, slow-spreading pools
-- The fluid continuously evolves even without input — slow ambient currents keep it alive
-- Notes trigger visual "blooms" at the cursor — a burst of color/light that syncs with the sound's attack and decay
-
-### Per-mood fluid behavior
-
-**Still Water**
-- Slow, glassy ripples with caustic light patterns
-- Low viscosity, high diffusion
-- Colors spread gently and linger
-- Cursor feels like dragging a finger through still water
-
-**Moon Drift**
-- Swirling, nebula-like ink clouds
-- Medium viscosity, spiral vortex tendencies
-- Colors twist and curl
-- Cursor leaves comet-like trails
-
-**Warm Rain**
-- Droplet impacts creating expanding concentric rings
-- Higher viscosity, colors pool and bloom outward
-- Idle rain drops fall from random positions
-
-### Glow layer
-
-A second rendering pass produces a bloom/glow effect (screen blend mode) that halos around bright fluid areas, similar in purpose to the current `mw-canvas-glow` but driven by the fluid simulation's brightness values.
+| File | Responsibility |
+|------|---------------|
+| `index.html` | Entry point, font preloads, script tags, meta tags |
+| `fluid-sim.js` | Standalone WebGL 2.0 fluid simulation class (`FluidSim`) |
+| `musical-waves-v2.jsx` | Main React component — all UI, audio, and interaction logic |
+| `preview-app.js` | Pre-bundled copy of the JSX (loaded by index.html) |
+| `preview-entry.jsx` | Entry point that mounts the React component |
 
 ---
 
-## 2. Controls — Edge-Emergent UI
+## Interaction Model
 
-No dock, no fixed cards. Controls live at the edges of the screen and emerge when the cursor moves toward them. During active play in the center, they are invisible.
+### Left-click-hold + drag = Play
 
-### Edge zones
+- Notes only trigger while the left mouse button is held down
+- Moving without clicking produces faint visual splats (no audio) — the fluid subtly responds to cursor presence
+- Horizontal position (left → right) maps to pitch (low → high)
+- Vertical position determines the zone: top = Crystal, middle = Pluck, bottom = Sub
+- Slow drag = spaced melody, fast sweep = rapid arpeggios
 
-| Edge | Controls | Behavior |
-|------|----------|----------|
-| **Bottom** | Mood selector | Three fluid-styled pills: Still Water, Moon Drift, Warm Rain. Each previews its color palette. Selecting triggers a full-screen fluid transition. |
-| **Right** | Pitch controls | Key selector, scale buttons, and an experimental scales toggle ("More Colors") as a vertical strip. Current key/scale glow brighter. Changes send a ripple from the right edge. Toggling "More Colors" reveals Phrygian and Whole Tone alongside the safe scales. |
-| **Left** | Zone selector | Crystal / Pluck / Sub as luminous glyphs. Active zone pulses softly. Can also auto-switch by vertical cursor position (existing behavior). |
-| **Top** | Scene toggles | Flow, Drone, and Share Link buttons. Flow label undulates when active. Drone emits steady glow when active. Share Link copies URL to clipboard with brief "Copied" confirmation. |
+### Right-click = Toggle Drone
 
-### Interaction model
+- Right-click anywhere latches a drone chord at that position
+- The drone stays locked at the right-click position — it does not follow the mouse
+- A glowing, rippling ring marks the drone position
+- Right-click again to release the drone
+- The Drone button in the top edge panel is an alternative toggle
 
-- Controls fade in over ~300ms when cursor enters the edge zone (~80px from edge), fade out when cursor leaves
-- On touch devices: swipe from any edge reveals that edge's controls; auto-dismiss after 3s of inactivity
-- During Flow mode (hands-free): a single tap anywhere reveals all edges briefly
+### Flow Mode (Auto-play)
 
-### Persistent info
+- Toggle via the top edge panel
+- A phantom cursor (60% opacity) drifts across the canvas, playing notes automatically
+- Flow follows the mouse cursor by default
+- Left-click pins the flow at that position — flow keeps playing there while you play notes freely elsewhere
+- Click on the pinned flow position (within 40px) to unpin — flow follows mouse again
+- Turning off Flow resets the pin
 
-The current mood name, key, scale, and **active zone** are rendered as faint watermark text in the lower-left corner — always visible at ~15% opacity, part of the canvas aesthetic. They subtly brighten when their corresponding edge controls are active. The zone indicator updates in real-time as the cursor moves vertically or the zone is manually changed.
+### Touch Devices
 
----
-
-## 3. Typography & Visual Identity
-
-### Font pairing
-
-- **Headings / mood names**: Elegant serif — Playfair Display or similar. Used for mood name watermark, intro screen title, and large display text.
-- **Labels / controls**: Clean geometric sans — Inter or DM Sans. Small, light weight, generous letter-spacing. Used for edge controls, zone labels, status text.
-
-### Text rendering
-
-- All persistent text (watermark mood name, key, scale) rendered directly on the WebGL canvas or as absolutely-positioned HTML with `mix-blend-mode: soft-light` — embedded in the fluid, not floating above it
-- Text color derived from the mood's palette at low opacity — never pure white
-- Mood name watermark: ~72px, ~12-15% opacity, lower-left position
-
-### Spacing
-
-Generous throughout. Controls have wide padding, large hit targets, and breathe. The screen is mostly canvas — UI elements occupy the edges only when summoned.
+- Single finger touch + drag = play (same as left-click-hold)
+- Two-finger tap = toggle drone (300ms debounce to distinguish from pinch-zoom)
 
 ---
 
-## 4. Cinematic Intro Sequence
+## Zones
 
-Replace the current modal with a full-screen cinematic reveal.
+Three instrument zones arranged top-to-bottom, each with distinct audio character:
 
-### The sequence
+### Crystal (top third)
 
-1. **Black screen** (~1s) — App loads to a completely dark canvas.
-2. **Mood name** — Fades in center-screen in the serif font, large, elegant, low opacity. e.g. "Still Water." Tagline appears beneath: "cool, clear, and very forgiving."
-3. **First ripple** — A single fluid bloom originates from center, slow, luminous, expanding outward. This step is purely visual — no audio plays yet (browsers require a user gesture to unlock AudioContext). The fluid sim is now running at idle with slow ambient currents.
-4. **Invitation** — Text transitions to: "Touch anywhere to begin." The entire screen is the trigger.
-5. **First touch** — User touches/clicks. AudioContext starts, a filtered drone fades in over ~1s to establish atmosphere. Title text dissolves into the fluid (letters break apart into particles that join the flow). A bloom erupts from the touch point. They are now playing.
+- **Synth**: Per-mood oscillator (fatsine/fmsine/sine), fast attack
+- **Character**: Sparkly, bright, responsive
+- **Min note gap**: 30ms — allows rapid runs and arpeggios
+- **Velocity**: Driven by vertical position + drag speed bonus
+- **Visual**: Small, bright, high-intensity splats
+- **Octave range**: 4–6
 
-### Mood switching transition
+### Pluck (middle third)
 
-- Current fluid drains toward edges over ~800ms
-- During drain, the existing audio continues playing (old audio graph is still active)
-- Brief dark beat (~200ms) — audio graph rebuild (`buildAudioGraph`) happens during this pause
-- New mood's palette floods in from center once the audio graph is ready
-- Mood name flashes briefly center-screen
-- If audio rebuild takes longer than ~200ms, extend the dark beat to match — never start new visuals before audio is ready
+- **Synth**: Per-mood oscillator (triangle/fatsawtooth), medium attack (~40ms)
+- **Character**: Warm, expressive, velocity-sensitive
+- **Min note gap**: 80ms
+- **Velocity**: Driven by vertical position. Drag speed modulates note *duration* — slow drags = longer legato notes, fast drags = short plucks
+- **Visual**: Medium flowing ribbon splats
+- **Octave range**: 3–5
 
-### Returning users
+### Sub (bottom third)
 
-If the URL has mood/key/scale params (share link), skip steps 1-2 and go straight to the invitation with the fluid already active.
-
----
-
-## 5. Cursor & Interaction Feedback
-
-### Cursor
-
-Replace the 10px white dot with a fluid-reactive orb:
-
-| State | Appearance |
-|-------|------------|
-| **Idle/hovering** | Small (~16px), soft glow in mood's accent color |
-| **Dragging/playing** | Expands (~24px), glow intensifies, short luminous trail feeding into fluid sim |
-| **Near an edge** | Shifts to neutral white, shrinks slightly — signals "UI" space |
-| **Touch devices** | Hidden (finger is the cursor) |
-
-### Note feedback
-
-- Each note trigger sends a radial pulse outward from the cursor
-- Diameter and duration matched to the note's length and zone:
-  - Crystal: tight bright flash
-  - Sub: wide slow bloom
-- Pulse color matches zone color from the mood palette
-- Multiple rapid notes create overlapping rings — visual polyphony
-
-### Drone feedback
-
-- When drone is active, a steady, slowly breathing ring of light stays in place on the canvas at the latch position
-- The fluid flows around and through the ring
-- Ring color matches the drone note's zone
-
-### Flow mode visual
-
-- An autonomous phantom cursor drifts across the canvas following the existing noise-based motion path
-- Same orb treatment but at ~60% opacity — a ghostly presence painting the fluid on its own
+- **Synth**: Per-mood oscillator (sine/fatsine), slow attack (~150ms), sub-octave layer (60% velocity)
+- **Character**: Heavy, deliberate, deep
+- **Min note gap**: 200ms — each note is an event
+- **Velocity**: Driven by vertical position only
+- **Visual**: Large, slow-spreading deep pools
+- **Octave range**: 1–3
+- **Polyphony**: 10 (doubled due to sub-octave layer)
 
 ---
 
-## 6. Per-Mood Worlds
+## Moods
 
-### Still Water
+Three mood presets, each a musically distinct world:
 
-- **Palette**: Deep ocean blues, cool cyan accents, silver highlights
-- **Fluid**: Low viscosity, high diffusion. Slow glassy ripples. Caustic light patterns shimmer.
-- **Idle**: Gentle currents drift left to right, like a still pond with faint breeze
-- **Note blooms**: Concentric ripples radiating outward, like stones in water
-- **Drone ring**: Soft cyan pool of light, ripples passing through
-- **Edge controls tint**: Cool blue-white
+### Still Water (C Pentatonic)
 
-### Moon Drift
+- **Character**: Ethereal, spacious, meditative
+- **Synths**: Fat detuned sines (crystal), triangle (pluck), pure sine (sub), fat sine drone
+- **Effects**: Very long reverb (9.5s, 70% wet), heavy chorus shimmer, spacious delay (dotted quarter, 22% feedback)
+- **Flow**: Slow (420ms interval), quiet (0.16 velocity), sustained quarter notes
+- **Idle**: Ambient notes every 5.5s
+- **Fluid**: Low viscosity, high diffusion, gentle drift idle
+- **Palette**: Deep ocean blues, cyan, silver
 
-- **Palette**: Deep indigo/violet, lavender accents, silver-purple highlights
-- **Fluid**: Medium viscosity, spiral vortex tendencies. Nebula ink swirls.
-- **Idle**: Slow clockwise rotation from center, like a galaxy spinning
-- **Note blooms**: Comet-like bursts that spiral outward with curving tails
-- **Drone ring**: Softly pulsing violet halo, ink swirling around it
-- **Edge controls tint**: Lavender-white
+### Moon Drift (D Dorian)
 
-### Warm Rain
+- **Character**: Mysterious, ghostly, echo-heavy
+- **Synths**: FM sine with harmonics (crystal), detuned sawtooth (pluck), fat sine (sub), wide-spread fat sine drone
+- **Effects**: Moderate reverb (6.5s), heavy delay feedback (35%), fast deep chorus (1.2Hz) for otherworldly shimmer
+- **Flow**: Fast (200ms interval), eighth notes
+- **Idle**: Ambient notes every 3.2s
+- **Fluid**: Medium viscosity, high curl (spiral tendency), spiral idle
+- **Palette**: Deep indigo/violet, lavender, silver-purple
 
-- **Palette**: Deep amber/brown, warm orange accents, golden highlights
-- **Fluid**: Higher viscosity, colors pool and stay close. Droplet physics.
-- **Idle**: Raindrops from random top positions, each creating expanding ring on impact
-- **Note blooms**: Splashing impact rings, warmer and wider than Still Water
-- **Drone ring**: Warm golden glow, rain rings passing through
-- **Edge controls tint**: Warm amber-white
+### Warm Rain (A Natural Minor)
+
+- **Character**: Intimate, earthy, direct
+- **Synths**: Pure sine (crystal — soft raindrops), clean triangle (pluck — kalimba-like), pure sine (sub)
+- **Effects**: Short reverb (3.5s, 30% wet), minimal delay, very low chorus, low filter (2200Hz)
+- **Flow**: Quick (220ms interval), short 16th notes, punchy and rhythmic
+- **Idle**: Ambient notes every 3.4s
+- **Fluid**: High viscosity, low diffusion, rain idle (droplets from top)
+- **Palette**: Deep amber/brown, warm orange, golden
 
 ---
 
-## Technical Considerations
+## UI — Edge-Emergent Controls
 
-### Rendering Architecture
+No dock, no fixed panels. Controls live at screen edges and appear when the cursor approaches (~80px threshold). They fade in over 300ms with a subtle slide-in transform. Tab key reveals all edges for keyboard navigation. Escape hides them.
 
-- **Single WebGL 2.0 canvas** handles the entire fluid simulation using multiple framebuffer objects (FBOs) for the simulation passes (velocity, pressure, divergence, dye/color)
-- The glow/bloom effect is a post-processing pass within the same WebGL context — render the fluid to an FBO, apply a blur shader pass, then composite with additive blending to the screen. No second canvas needed.
-- The current two `<canvas>` elements (2D context) are replaced by one `<canvas>` element with a `webgl2` context
-- Target 60fps on modern hardware
+| Edge | Controls |
+|------|----------|
+| **Bottom** | Mood selector — Still Water, Moon Drift, Warm Rain |
+| **Right** | Pitch — root key selector, scale buttons, "More Colors" toggle for experimental scales |
+| **Left** | Zone selector — Crystal, Pluck, Sub (clickable buttons) |
+| **Top** | Flow toggle, Drone toggle, Volume slider (dB), Share link |
 
-### Fluid Simulation Integration
+All buttons have `aria-label` and `aria-pressed` attributes. Edge panels are `<nav>` elements with `aria-label`. Volume slider and key select have labels.
 
-The project has no build step — all dependencies load via ESM importmap from `esm.sh`. The fluid simulation will be authored as a **separate vanilla JS file** (`fluid-sim.js`) loaded via `<script>` tag in `index.html`.
+---
 
-**Strategy:**
-- Use Pavel Dobryakov's WebGL fluid simulation as a reference/starting point, adapted and simplified into a single `fluid-sim.js` file in the project root
-- GLSL shaders are inlined as template literal strings within `fluid-sim.js`
-- The module exports a `FluidSim` class that the React component instantiates, passing in the canvas element
-- The class exposes methods: `init(canvas)`, `setMoodParams(params)`, `addSplat(x, y, dx, dy, color, radius)`, `step()`, `resize()`, `destroy()`
-- The React component calls `addSplat()` on pointer move and `step()` in the animation loop
+## Persistent Watermark
 
-### Fluid Parameters Per Mood
+Lower-left corner, always visible at 15% opacity:
+- Mood name in Playfair Display (72px, `mix-blend-mode: soft-light`)
+- Key, scale, and zone in Inter (13px, uppercase)
+- Brightens to 35% when the left edge panel is active
 
-The MOODS config expands with numeric fluid parameters (all values on 0.0–1.0 scale unless noted):
+---
 
-| Parameter | Still Water | Moon Drift | Warm Rain | Description |
-|-----------|-------------|------------|-----------|-------------|
-| `viscosity` | 0.1 | 0.4 | 0.7 | Resistance to flow (higher = thicker) |
-| `diffusion` | 0.8 | 0.5 | 0.3 | How quickly color spreads |
-| `curl` | 0.1 | 0.6 | 0.2 | Vorticity / swirl tendency |
-| `pressure` | 0.6 | 0.5 | 0.7 | Pressure iteration strength |
-| `splatRadius` | 0.004 | 0.003 | 0.005 | Size of color injection (ratio of canvas) |
-| `dissipation` | 0.97 | 0.985 | 0.96 | How long color lingers (closer to 1 = longer) |
-| `bloomIntensity` | 0.3 | 0.5 | 0.25 | Glow pass strength |
-| `idleForce` | 0.05 | 0.1 | 0.15 | Strength of ambient currents when idle |
+## Cinematic Intro
 
-These are starting values — expect iterative tuning during implementation.
+Phase-based state machine: `black` → `title` → `ripple` → `invite` → `playing`
 
-### Font Loading
+1. **Black** (1s) — dark canvas
+2. **Title** (2s) — "Musical Waves" label, mood name, tagline fade in
+3. **Ripple** (2s) — fluid bloom from center, simulation running at idle
+4. **Invite** — "Touch anywhere to begin" pulses, entire screen is the trigger
+5. **Playing** — audio starts, title dissolves, user is playing
 
-- Load Playfair Display and Inter via `<link rel="preload">` in `index.html` to avoid FOUT during the cinematic intro
-- Use `font-display: block` for the serif font (the intro sequence depends on it rendering correctly)
-- Use `font-display: swap` for the sans font (controls can flash briefly without issue)
-- Fallbacks: Playfair Display → Georgia → serif; Inter → system-ui → sans-serif
+Returning users (URL has `?m=` param) skip to the ripple phase.
 
-### Graceful Degradation
+---
 
-| Tier | Condition | Behavior |
-|------|-----------|----------|
-| **Full** | WebGL 2.0, 4+ cores | Full fluid sim at 256x256, bloom pass, all effects |
-| **Reduced** | WebGL 2.0, <4 cores or frame time >20ms | Sim resolution drops to 128x128, bloom disabled |
-| **Minimal** | WebGL 1.0 only | Simplified shader (advection + dye only, no pressure solve), 128x128, no bloom |
-| **Fallback** | No WebGL | Keep current 2D canvas particle system as-is — the visual overhaul degrades to the existing experience with the new UI layout and typography |
+## Mood Switching Transition
 
-Detection: check `canvas.getContext('webgl2')` first, fall back to `webgl`, then to `2d`. Monitor frame time over the first 60 frames and downshift tier if average exceeds 20ms.
+- Drain phase (800ms) — fluid darkens from edges, audio continues playing
+- Dark beat — audio graph rebuilds, notes rebuilt synchronously before synths
+- Flood phase (600ms) — new mood floods in from center with a color splat
+- Mood name flashes center-screen (fade-in-out animation)
 
-### Accessibility
+---
 
-- Edge controls are standard DOM `<button>` and `<select>` elements — screen readers can access them
-- **Keyboard navigation**: Tab cycles through all edge controls (they become visible when focused). Escape hides them. A keyboard shortcut (e.g., `?` or `Tab`) reveals all edges simultaneously.
-- **`prefers-reduced-motion`**: When active, disable fluid animation (render a static gradient per mood instead), disable cursor trail/bloom animations, and use instant transitions instead of animated ones. Controls still function identically.
-- All interactive elements retain visible focus indicators
+## Drone Ring Visual
 
-### Guide Text
+A glowing, rippling indicator at the right-click position:
+- 2px border in the latched zone's color (70% opacity)
+- Triple-layer glow (24px, 60px, 100px spread) + inset glow
+- Breathing animation (3s cycle, scales 1.0–1.08, opacity 0.6–1.0)
+- Two ripple rings pulse outward (staggered 1.5s apart, scale to 1.8x, fade out)
+- Size varies by zone: Crystal 50px, Pluck 80px, Sub 120px
 
-The current guide tooltip ("Move left for lower notes...") is removed. The cinematic intro provides the onboarding moment. For users who need a reminder, a brief help hint appears the first time they hover near an edge (e.g., "drag to play" near center, "hover edges for controls") — shown once per session via sessionStorage flag.
+---
 
-### Canvas Resize
+## Cursor
 
-On window resize:
-- The WebGL canvas dimensions update to match the new viewport
-- Framebuffer textures are reallocated at the new resolution (or sim resolution, if decoupled)
-- Current fluid state is lost on resize — a fresh idle animation begins. This is acceptable because resize events are infrequent during play.
+A radial-gradient orb that adapts to state:
+- **Idle**: 16px, soft glow in zone color, CSS margin centering
+- **Playing** (left-click held): 24px, intensified glow
+- **Near edge**: 12px, neutral white, no glow
+- **Touch devices**: Hidden
+- Smooth CSS transitions between states (`margin` handles centering)
+- `will-change: transform` for GPU compositing
 
-### Architecture
+---
 
-- `fluid-sim.js` — new file, standalone WebGL fluid simulation class (~300-500 lines)
-- `musical-waves-v2.jsx` — refactored: particle rendering code replaced with FluidSim integration, dock/card UI replaced with edge-emergent controls, intro sequence rewritten
-- `index.html` — add font preloads, add `<script src="fluid-sim.js">` tag
-- Edge UI is pure CSS + pointer tracking — no new framework dependencies
+## Fluid Simulation
 
-### Migration
+`fluid-sim.js` — standalone WebGL 2.0 Navier-Stokes solver:
 
-- Current particle rendering code in the animation loop is fully replaced
-- Tone.js audio architecture stays the same — no audio changes
-- MOODS config structure expands but doesn't break existing fields (audio params untouched)
-- Share link URL params continue to work (reading and writing)
+- GLSL 300 es shaders inlined as template literals
+- Double-buffered FBOs: velocity (RG16F), pressure (R16F), dye (RGBA16F)
+- Bloom post-processing with prefilter, downsample blur chain, upsample accumulation
+- Per-mood parameters: viscosity, diffusion, curl, pressure, splatRadius, dissipation, bloomIntensity, idleForce, idleMode
+
+**Per-zone splat scaling:**
+- Crystal: 0.5x radius, 1.4x intensity, 1.5x velocity (sharp bright points)
+- Pluck: 1.0x (baseline flowing ribbons)
+- Sub: 2.0x radius, 0.6x intensity, 0.5x velocity (wide deep pools)
+
+**Idle modes per mood:**
+- `drift` (Still Water) — gentle left-to-right current
+- `spiral` (Moon Drift) — clockwise rotation from center
+- `rain` (Warm Rain) — random droplets from top
+
+**Graceful degradation:**
+- Canvas sized at `devicePixelRatio` for HiDPI displays
+- `webglTriedRef` prevents retry after init failure
+- Fallback message shown when WebGL unavailable
+- `prefers-reduced-motion` disables all animations
+
+---
+
+## Audio Architecture
+
+All synths built per mood in `buildAudioGraph`. Signal chain:
+
+```
+Crystal PolySynth → Chorus → Delay → Reverb → Filter → Compressor → Limiter → Destination
+Pluck PolySynth   → Delay  → (same chain)
+Sub PolySynth     → Reverb → (same chain)
+Drone PolySynth   → Reverb → (same chain)
+```
+
+- Each mood defines oscillator types, envelope parameters, and effects settings
+- `await reverb.ready` before marking audio ready
+- `audioStartingRef` prevents double-init on simultaneous triggers
+- `moodTransitionRef` prevents double mood-switch race conditions
+- Master volume controlled by `Tone.getDestination().volume`
+- Sub zone triggers sub-octave layer (note one octave below at 60% velocity)
+
+---
+
+## URL State / Share Links
+
+Parameters update in real-time via `history.replaceState`:
+- `m` — mood key
+- `s` — scale key
+- `k` — root note
+- `f=1` — flow enabled
+- `x=1` — experimental scales visible
+
+Share button copies the current URL to clipboard with visual "Copied" confirmation.
+
+---
+
+## Accessibility
+
+- All buttons have `aria-label` and `aria-pressed`
+- Edge panels are `<nav>` with `aria-label`
+- Volume slider and key select have labels
+- Tab reveals all edge panels via `:focus-within`
+- Escape hides all panels
+- `prefers-reduced-motion`: disables all transitions and animations
+- Intro overlay has `role="button"`, `tabIndex`, keyboard activation (Enter/Space)
+- WebGL fallback message when unavailable
