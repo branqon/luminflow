@@ -1,6 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import MusicalWavesV2 from "./musical-waves-v2.jsx";
+import MusicalWavesV2 from "./luminflow.jsx";
 
 const rootEl = document.getElementById("root");
 
