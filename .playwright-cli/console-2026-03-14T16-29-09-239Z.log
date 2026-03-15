@@ -1,4 +1,0 @@
-[     396ms] [WARNING] The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. https://developer.chrome.com/blog/autoplay/#web_audio @ https://esm.sh/standardized-audio-context@25.3.77/es2022/standardized-audio-context.mjs:3
-[     396ms] [WARNING] The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. https://developer.chrome.com/blog/autoplay/#web_audio @ https://esm.sh/standardized-audio-context@25.3.77/es2022/standardized-audio-context.mjs:3
-[     535ms] [ERROR] Failed to load resource: the server responded with a status of 404 (File not found) @ http://127.0.0.1:4173/favicon.ico:0
-[     545ms] [ERROR] Failed to load resource: the server responded with a status of 404 (File not found) @ http://127.0.0.1:4173/favicon.ico:0
