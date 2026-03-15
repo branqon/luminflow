@@ -333,6 +333,7 @@ function MusicalWavesV2() {
   const cursorRef = useRef(null);
   const phantomCursorRef = useRef(null);
   const [dronePosition, setDronePosition] = useState(null);
+  const [droneZone, setDroneZone] = useState("pluck");
   const droneLatchPosRef = useRef(null);
   const boundingRef = useRef(null);
   const fluidSimRef = useRef(null);
@@ -612,6 +613,7 @@ function MusicalWavesV2() {
         droneSigRef.current = sig;
         droneChangeRef.current = Tone.now();
         setDroneActive(true);
+        setDroneZone(zone);
         if (!droneLatchPosRef.current) {
           droneLatchPosRef.current = { x: posX, y: posY };
         }
@@ -1136,11 +1138,19 @@ function MusicalWavesV2() {
                 opacity: 0.6,
                 boxShadow: `0 0 20px 5px ${colorWithAlpha(mood.zoneColors[currentZone], 0.25)}`
               } }),
-              droneActive && dronePosition && /* @__PURE__ */ jsx("div", { className: "mw-drone-ring", style: {
+              droneActive && dronePosition && /* @__PURE__ */ jsxs("div", { className: "mw-drone-ring", style: {
                 left: dronePosition.x,
                 top: dronePosition.y,
-                borderColor: colorWithAlpha(mood.zoneColors[currentZone], 0.3)
-              } }),
+                borderColor: colorWithAlpha(mood.zoneColors[droneZone], 0.5),
+                boxShadow: `0 0 18px 4px ${colorWithAlpha(mood.zoneColors[droneZone], 0.2)}, 0 0 40px 12px ${colorWithAlpha(mood.zoneColors[droneZone], 0.08)}, inset 0 0 18px 4px ${colorWithAlpha(mood.zoneColors[droneZone], 0.1)}`
+              }, children: [
+                /* @__PURE__ */ jsx("div", { className: "mw-drone-ripple", style: {
+                  borderColor: colorWithAlpha(mood.zoneColors[droneZone], 0.15)
+                } }),
+                /* @__PURE__ */ jsx("div", { className: "mw-drone-ripple mw-drone-ripple-2", style: {
+                  borderColor: colorWithAlpha(mood.zoneColors[droneZone], 0.08)
+                } })
+              ] }),
               introPhase !== "playing" && /* @__PURE__ */ jsxs(
                 "div",
                 {
@@ -1362,16 +1372,30 @@ function MusicalWavesV2() {
           position: absolute;
           width: 80px; height: 80px;
           border-radius: 50%;
-          border: 1px solid;
+          border: 1.5px solid;
           transform: translate(-50%, -50%);
           pointer-events: none;
           animation: breathe 3s ease-in-out infinite;
           z-index: 4;
           will-change: transform, opacity;
         }
+        .mw-drone-ripple {
+          position: absolute;
+          inset: -12px;
+          border-radius: 50%;
+          border: 1px solid;
+          animation: ripple-out 3s ease-out infinite;
+        }
+        .mw-drone-ripple-2 {
+          animation-delay: 1.5s;
+        }
         @keyframes breathe {
-          0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.4; }
-          50% { transform: translate(-50%, -50%) scale(1.08); opacity: 0.7; }
+          0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
+          50% { transform: translate(-50%, -50%) scale(1.06); opacity: 0.85; }
+        }
+        @keyframes ripple-out {
+          0% { transform: scale(1); opacity: 1; }
+          100% { transform: scale(1.8); opacity: 0; }
         }
         .mw-intro {
           position: absolute;
