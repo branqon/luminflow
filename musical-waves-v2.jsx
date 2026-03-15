@@ -313,6 +313,7 @@ export default function MusicalWavesV2() {
   const initialStateRef = useRef(readInitialState());
 
   const [audioStarted, setAudioStarted] = useState(false);
+  const [audioSuspended, setAudioSuspended] = useState(false);
   const [introPhase, setIntroPhase] = useState('black');
   // Phases: 'black' -> 'title' -> 'ripple' -> 'invite' -> 'playing'
   const [currentMood, setCurrentMood] = useState(initialStateRef.current.mood);
@@ -1170,6 +1171,36 @@ export default function MusicalWavesV2() {
     return () => clearInterval(intervalId);
   }, [audioStarted, droneActive, flowEnabled, injectSplat, graphVersion, mood.audio.idleEvery]);
 
+  // Detect audio context suspension (tab switch, Bluetooth disconnect, etc.)
+  useEffect(() => {
+    if (!audioStarted) return;
+    const ctx = Tone.getContext().rawContext;
+    if (!ctx) return;
+
+    const checkState = () => {
+      setAudioSuspended(ctx.state === 'suspended');
+    };
+
+    ctx.addEventListener('statechange', checkState);
+    // Also poll as a fallback — some browsers don't fire statechange reliably
+    const pollId = setInterval(checkState, 2000);
+
+    return () => {
+      ctx.removeEventListener('statechange', checkState);
+      clearInterval(pollId);
+    };
+  }, [audioStarted]);
+
+  const resumeAudio = useCallback(async () => {
+    try {
+      await Tone.start();
+      await Tone.getContext().rawContext?.resume();
+      setAudioSuspended(false);
+    } catch (error) {
+      // Ignore resume failures
+    }
+  }, []);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
@@ -1376,6 +1407,13 @@ export default function MusicalWavesV2() {
         <div className="mw-fallback">
           <p>Your browser doesn't support WebGL 2.0, which is needed for the visual effects.</p>
           <p>The audio instrument still works — click or tap anywhere to play.</p>
+        </div>
+      )}
+
+      {audioSuspended && (
+        <div className="mw-audio-suspended" onClick={resumeAudio}>
+          <p>Audio was interrupted</p>
+          <button onClick={resumeAudio}>Tap to resume</button>
         </div>
       )}
 
@@ -1942,6 +1980,43 @@ export default function MusicalWavesV2() {
           line-height: 1.5;
         }
         .mw-fallback p:last-child { margin: 0; }
+        .mw-audio-suspended {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 16px;
+          z-index: 25;
+          background: rgba(0,0,0,0.7);
+          backdrop-filter: blur(8px);
+          cursor: pointer;
+        }
+        .mw-audio-suspended p {
+          font-family: 'Inter', system-ui, sans-serif;
+          font-size: 14px;
+          color: var(--muted);
+          letter-spacing: 0.06em;
+          margin: 0;
+        }
+        .mw-audio-suspended button {
+          min-height: 48px;
+          padding: 0 28px;
+          border-radius: 999px;
+          border: 1px solid var(--border);
+          background: linear-gradient(135deg, rgba(255,255,255,0.14), rgba(255,255,255,0.05));
+          color: var(--text);
+          font-family: 'Inter', system-ui, sans-serif;
+          font-size: 14px;
+          letter-spacing: 0.04em;
+          cursor: pointer;
+          transition: transform 0.18s ease, border-color 0.18s ease;
+        }
+        .mw-audio-suspended button:hover {
+          transform: translateY(-1px);
+          border-color: rgba(255,255,255,0.3);
+        }
         @keyframes drain {
           from { opacity: 0; }
           to { opacity: 1; }

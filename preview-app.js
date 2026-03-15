@@ -301,6 +301,7 @@ function readInitialState() {
 function MusicalWavesV2() {
   const initialStateRef = useRef(readInitialState());
   const [audioStarted, setAudioStarted] = useState(false);
+  const [audioSuspended, setAudioSuspended] = useState(false);
   const [introPhase, setIntroPhase] = useState("black");
   const [currentMood, setCurrentMood] = useState(initialStateRef.current.mood);
   const [currentScale, setCurrentScale] = useState(initialStateRef.current.scale);
@@ -1012,6 +1013,28 @@ function MusicalWavesV2() {
     return () => clearInterval(intervalId);
   }, [audioStarted, droneActive, flowEnabled, injectSplat, graphVersion, mood.audio.idleEvery]);
   useEffect(() => {
+    if (!audioStarted) return;
+    const ctx = Tone.getContext().rawContext;
+    if (!ctx) return;
+    const checkState = () => {
+      setAudioSuspended(ctx.state === "suspended");
+    };
+    ctx.addEventListener("statechange", checkState);
+    const pollId = setInterval(checkState, 2e3);
+    return () => {
+      ctx.removeEventListener("statechange", checkState);
+      clearInterval(pollId);
+    };
+  }, [audioStarted]);
+  const resumeAudio = useCallback(async () => {
+    try {
+      await Tone.start();
+      await Tone.getContext().rawContext?.resume();
+      setAudioSuspended(false);
+    } catch (error) {
+    }
+  }, []);
+  useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     params.set("m", currentMood);
@@ -1194,6 +1217,10 @@ function MusicalWavesV2() {
         !webglAvailable && /* @__PURE__ */ jsxs("div", { className: "mw-fallback", children: [
           /* @__PURE__ */ jsx("p", { children: "Your browser doesn't support WebGL 2.0, which is needed for the visual effects." }),
           /* @__PURE__ */ jsx("p", { children: "The audio instrument still works \u2014 click or tap anywhere to play." })
+        ] }),
+        audioSuspended && /* @__PURE__ */ jsxs("div", { className: "mw-audio-suspended", onClick: resumeAudio, children: [
+          /* @__PURE__ */ jsx("p", { children: "Audio was interrupted" }),
+          /* @__PURE__ */ jsx("button", { onClick: resumeAudio, children: "Tap to resume" })
         ] }),
         /* @__PURE__ */ jsx("nav", { className: `mw-edge mw-edge-bottom ${activeEdge === "bottom" || activeEdge === "all" ? "visible" : ""}`, "aria-label": "Mood presets", children: /* @__PURE__ */ jsx("div", { className: "mw-edge-content", children: Object.entries(MOODS).map(([key, preset]) => /* @__PURE__ */ jsx(
           "button",
@@ -1759,6 +1786,43 @@ function MusicalWavesV2() {
           line-height: 1.5;
         }
         .mw-fallback p:last-child { margin: 0; }
+        .mw-audio-suspended {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 16px;
+          z-index: 25;
+          background: rgba(0,0,0,0.7);
+          backdrop-filter: blur(8px);
+          cursor: pointer;
+        }
+        .mw-audio-suspended p {
+          font-family: 'Inter', system-ui, sans-serif;
+          font-size: 14px;
+          color: var(--muted);
+          letter-spacing: 0.06em;
+          margin: 0;
+        }
+        .mw-audio-suspended button {
+          min-height: 48px;
+          padding: 0 28px;
+          border-radius: 999px;
+          border: 1px solid var(--border);
+          background: linear-gradient(135deg, rgba(255,255,255,0.14), rgba(255,255,255,0.05));
+          color: var(--text);
+          font-family: 'Inter', system-ui, sans-serif;
+          font-size: 14px;
+          letter-spacing: 0.04em;
+          cursor: pointer;
+          transition: transform 0.18s ease, border-color 0.18s ease;
+        }
+        .mw-audio-suspended button:hover {
+          transform: translateY(-1px);
+          border-color: rgba(255,255,255,0.3);
+        }
         @keyframes drain {
           from { opacity: 0; }
           to { opacity: 1; }
