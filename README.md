@@ -4,6 +4,8 @@ A browser-based ambient instrument for creating generative soundscapes. Drag to 
 
 **[Try it live](https://branqon.github.io/luminflow)**
 
+![Luminflow demo](assets/demo.gif)
+
 ## Controls
 
 | Input | Action |
@@ -21,6 +23,12 @@ A browser-based ambient instrument for creating generative soundscapes. Drag to 
 ### Moods
 
 Switch between **Still Water**, **Moon Drift**, and **Warm Rain** — each with unique synth voices, effects, and color palettes.
+
+<p align="center">
+  <img src="assets/still-water.png" width="32%" alt="Still Water">
+  <img src="assets/moon-drift.png" width="32%" alt="Moon Drift">
+  <img src="assets/warm-rain.png" width="32%" alt="Warm Rain">
+</p>
 
 ## Run locally
 
