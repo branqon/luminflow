@@ -370,7 +370,6 @@ export default function MusicalWavesV2() {
   const rafRef = useRef(null);
   const lastNoteTimeRef = useRef(0);
   const themeRef = useRef(MOODS[initialStateRef.current.mood]);
-  const idleStepRef = useRef(0);
   const lastInteractionRef = useRef(Date.now());
   const mouseRef = useRef({
     x: -120,
@@ -1133,43 +1132,6 @@ export default function MusicalWavesV2() {
     return () => stopFlow();
   }, [audioStarted, flowEnabled, graphVersion, mood.audio.flowInterval, runFlowStep, stopFlow]);
 
-  useEffect(() => {
-    if (!audioStarted || !audioReadyRef.current) return undefined;
-
-    const intervalId = window.setInterval(() => {
-      if (!audioReadyRef.current || flowEnabled || droneActive) return;
-      if (Date.now() - lastInteractionRef.current < 7000) return;
-
-      const zone = ["sub", "pluck", "crystal"][idleStepRef.current % 3];
-      const notes = scaleNotesRef.current[zone];
-      const pattern = themeRef.current.idlePattern;
-      if (!notes || !notes.length) return;
-
-      const noteIndex = clamp(
-        Math.floor(notes.length * 0.22) + pattern[idleStepRef.current % pattern.length],
-        0,
-        notes.length - 1
-      );
-      const synth = synthsRef.current[zone];
-      if (!synth) return;
-
-      try {
-        synth.triggerAttackRelease(notes[noteIndex], 0.48, Tone.now(), 0.13);
-      } catch (error) {
-        // Ignore transient audio errors.
-      }
-
-      const rect = boundingRef.current;
-      if (rect) {
-        const rx = Math.random() * rect.width;
-        const ry = Math.random() * rect.height;
-        injectSplat(rx, ry, 0, 0, zone);
-      }
-      idleStepRef.current += 1;
-    }, mood.audio.idleEvery);
-
-    return () => clearInterval(intervalId);
-  }, [audioStarted, droneActive, flowEnabled, injectSplat, graphVersion, mood.audio.idleEvery]);
 
   // Detect audio context suspension (tab switch, Bluetooth disconnect, etc.)
   useEffect(() => {
