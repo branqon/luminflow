@@ -723,8 +723,8 @@ export default function MusicalWavesV2() {
         velocity = 0.12 + (1 - yRatio) * 0.23;
         duration = 0.1 + (1 - clamp(dragSpeed / 80, 0, 1)) * 0.4;
       } else {
-        velocity = 0.10 + (1 - yRatio) * 0.18;
-        duration = 0.3;
+        velocity = 0.25 + (1 - yRatio) * 0.2;
+        duration = 0.6;
       }
 
       try {
@@ -734,7 +734,7 @@ export default function MusicalWavesV2() {
           const scaleSize = SCALES[currentScale].intervals.length;
           const subIndex = clamp(noteIndex - scaleSize, 0, notes.length - 1);
           if (subIndex !== noteIndex) {
-            synth.triggerAttackRelease(notes[subIndex], duration, Tone.now(), velocity * 0.6);
+            synth.triggerAttackRelease(notes[subIndex], duration, Tone.now(), velocity * 0.75);
           }
         }
       } catch (error) {
